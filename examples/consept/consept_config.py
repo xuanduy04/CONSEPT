@@ -9,6 +9,7 @@ class CONSEPTConfig(GRPOConfig):
     r"""
     Configuration class for the [`CONSEPTTrainer`].
     """
+    # Parameters that control the dynamic completion length
     initial_completion_length: Optional[int] = field(
         default=64,
         metadata={
@@ -24,7 +25,7 @@ class CONSEPTConfig(GRPOConfig):
     # )
 
     # default for template
-    name: Optional[str] = field(
+    _name_: Optional[str] = field(
         default=False,
         metadata={
             "help": ""
