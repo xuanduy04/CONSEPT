@@ -72,6 +72,7 @@ if __name__ == "__main__":
     ################
     trainer = CONSEPTTrainer(
         model=model_args.model_name_or_path,
+        processing_class=AutoTokenizer.from_pretrained(model_args.model_name_or_path, padding_side='left'),
         args=training_args,
         reward_funcs=get_semantic_reward(AutoTokenizer.from_pretrained(model_args.model_name_or_path).eos_token),
         train_dataset=train_dataset,

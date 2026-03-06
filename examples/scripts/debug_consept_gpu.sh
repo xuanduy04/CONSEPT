@@ -18,6 +18,5 @@ PARENT_DIR="$(dirname "$SCRIPT_DIR")"
         --num_generations 4 \
         --epsilon 3e-4 \
         --epsilon_high 4e-4 \
-        --loss_type grpo \
-        --use_cpu
+        --loss_type grpo
 )
