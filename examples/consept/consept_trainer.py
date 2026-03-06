@@ -82,7 +82,8 @@ from trl.trainer.utils import (
 from trl import GRPOTrainer
 
 from .consept_config import CONSEPTConfig
-from .get_prompt_collator import GetPromptCollator
+from .sampler import DynamicRepeatSampler
+from .collator import PromptSolutionCollator
 from .utils import print_prompt_text_completions_sample
 
 if is_peft_available():
@@ -167,10 +168,11 @@ class CONSEPTTrainer(GRPOTrainer):
         else:
             data_collator = self._get_collator_with_removed_columns(data_collator, description="training")
 
-        # vvvvvv below is the change
-        data_collator = GetPromptCollator(
+        # vvvvvv Here is the change
+        data_collator = PromptSolutionCollator(
             data_collator, self.processing_class, self.completion_length, self.prompt_length_remove_threshold
         )
+        # ^^^^^^
 
         dataloader_params = {
             "batch_size": self._train_batch_size * self.args.steps_per_generation,
@@ -190,6 +192,25 @@ class CONSEPTTrainer(GRPOTrainer):
             dataloader_params["prefetch_factor"] = self.args.dataloader_prefetch_factor
 
         return self.accelerator.prepare(DataLoader(train_dataset, **dataloader_params))
+
+    def _get_train_sampler(self, dataset: Optional[Dataset] = None) -> Sampler:
+        # Returns the GRPO Sampler, but "Dynamic" (i.e. only returns samples that satisfy a given function)
+        if dataset is None:
+            dataset = self.train_dataset
+
+        def valid_item_fn(item: str) -> bool:
+            tokens = self.processing_class.encode(item)
+            return len(tokens) - self.completion_length.value <= self.prompt_length_remove_threshold
+
+        return DynamicRepeatSampler(
+            data_source=dataset,
+            valid_item_fn=valid_item_fn,
+            mini_repeat_count=self.num_generations,
+            batch_size=self.args.generation_batch_size // self.num_generations,
+            repeat_count=self.num_iterations * self.args.steps_per_generation,
+            shuffle=self.shuffle_dataset,
+            seed=self.args.seed,
+        )
 
     # This method overrides `GRPO._generate` to support dynamic completion length
     # Maintenance note: This method is a copy-paste of the original `GRPO._generate`

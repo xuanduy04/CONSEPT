@@ -7,8 +7,8 @@ if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase
 
 
-class GetPromptCollator:
-    """Wrap the data collator to remove "masked" portions, based on a variable"""
+class PromptSolutionCollator:
+    """Wrap the data collator to create "prompt" and "solution" columns from raw "text"."""
 
     def __init__(
         self,
@@ -26,21 +26,12 @@ class GetPromptCollator:
         if not isinstance(feature, dict):
             return feature
 
-        if "prompt" in feature:
-            text_column = "prompt"
-        elif "solution" in feature:
-            text_column = "solution"
-        elif "text" in feature:
-            text_column = "text"
-        else:
+        if "text" not in feature:
             raise ValueError("Could not find raw text column")
 
-        tokens = self.tokenizer.encode(feature[text_column])
-        trimmed_tokens = tokens[: len(tokens) - min(self.completion_length.value, len(tokens))]
-        if len(trimmed_tokens) <= self.prompt_length_remove_threshold:
-            feature["prompt"] = self.tokenizer.eos_token
-        else:
-            feature["prompt"] = self.tokenizer.decode(trimmed_tokens)
+        tokens = self.tokenizer.encode(feature["text"])
+        feature["prompt"] = self.tokenizer.decode(tokens[: len(tokens) - self.completion_length.value])
+        feature["solution"] = self.tokenizer.decode(tokens[len(tokens) - self.completion_length.value :])
 
         return feature
 
@@ -58,26 +49,38 @@ if __name__ == "__main__":
 
     from trl.trainer.utils import identity
 
+    from .sampler import DynamicRepeatSampler
+
     prompt_length_remove_threshold = 100
     completion_length = multiprocessing.Value("i", 1000)
     processing_class = AutoTokenizer.from_pretrained("Qwen/Qwen3-0.6B-Base")
 
-    data_collator = identity
-    data_collator = GetPromptCollator(data_collator, processing_class, completion_length, prompt_length_remove_threshold)
+    def valid_item_fn(item: str) -> bool:
+        tokens = processing_class.encode(item)
+        return len(tokens) - completion_length.value <= prompt_length_remove_threshold
 
-    train_dataset = load_dataset(
-        "nvidia/Nemotron-Pretraining-Dataset-sample", name="Nemotron-CC-High-Quality", split="train[:5%]"
-    ).rename_column("text", "solution").remove_columns("id")
-    data_loader = DataLoader(train_dataset, collate_fn=data_collator)
+    data_collator = identity
+    data_collator = PromptSolutionCollator(
+        data_collator, processing_class, completion_length, prompt_length_remove_threshold
+    )
+
+    train_dataset = load_dataset("HuggingFaceTB/cosmopedia", name="openstax", split="train")
+    train_dataset = train_dataset.remove_columns([c for c in train_dataset.column_names if c != "text"])
+
+    data_loader = DataLoader(
+        train_dataset,
+        sampler=DynamicRepeatSampler(train_dataset, valid_item_fn=valid_item_fn),
+        collate_fn=data_collator,
+    )
 
     for i, data in enumerate(data_loader):
         tokenized_length_data = dict()
-        for k,v in data[0].items():
-            tokenized_length_data[k] = len(processing_class.encode(v)) if v != processing_class.eos_token else v
+        for k, v in data[0].items():
+            tokenized_length_data[k] = len(processing_class.encode(v))
 
         pprint(tokenized_length_data)
 
-        if i > 5:
+        if i > 10:
             break
 
     print(f"{processing_class.eos_token=}")
