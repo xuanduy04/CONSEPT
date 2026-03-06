@@ -258,6 +258,7 @@ class CONSEPTTrainer(GRPOTrainer):
                     self._logs["rewards"],
                     self._logs["advantages"],
                     self.state.global_step,
+                    self.processing_class.eos_token,
                     self.num_completions_to_print,
                 )
 

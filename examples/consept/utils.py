@@ -19,6 +19,7 @@ def print_prompt_text_completions_sample(
     rewards: dict[str, list[float]],
     advantages: list[float],
     step: int,
+    eos_token: str,
     num_samples: Optional[int] = None,
 ) -> None:
     """
@@ -38,6 +39,8 @@ def print_prompt_text_completions_sample(
             List of advantages corresponding to the prompts and completions.
         step (`int`):
             Current training step number, used in the output title.
+        eos_token (`str`):
+            The tokenizer's end-of-sentence token, to not print empty samples
         num_samples (`int`, *optional*):
             Number of random samples to display. If `None` (default), all items will be displayed.
 
@@ -66,8 +69,21 @@ def print_prompt_text_completions_sample(
             "The function `print_prompt_text_completions_sample` requires the `rich` library. Please install it with "
             "`pip install rich`."
         )
+
+    # filter empty prompts
+    valid_prompt_indices = [i for i, prompt in enumerate(prompts) if prompt != eos_token]
+    prompts = [prompts[i] for i in valid_prompt_indices]
+    completions = [completions[i] for i in valid_prompt_indices]
+    rewards = {key: [val[i] for i in valid_prompt_indices] for key, val in rewards.items()}
+    advantages = [advantages[i] for i in valid_prompt_indices]
+
+    # === Begin main code === #
     console = Console()
     table = Table(show_header=True, header_style="bold white", expand=True)
+
+    if len(prompts) == 0:
+        console.print("This sample has only empty prompts")
+        return
 
     # Add columns
     table.add_column("Prompt", style="bright_yellow")

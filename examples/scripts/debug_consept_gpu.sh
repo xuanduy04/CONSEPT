@@ -13,8 +13,8 @@ PARENT_DIR="$(dirname "$SCRIPT_DIR")"
         --dtype bfloat16 \
         --max_completion_length 1024 \
         --per_device_train_batch_size 1 \
-        --gradient_accumulation_steps 4 \
-        --generation_batch_size 16 \
+        --gradient_accumulation_steps 1 \
+        --generation_batch_size 4 \
         --num_generations 4 \
         --gradient_checkpointing false \
         --loss_type dr_grpo \
@@ -29,6 +29,5 @@ PARENT_DIR="$(dirname "$SCRIPT_DIR")"
         --save_steps 5 \
         --save_total_limit 5 \
         --num_train_epochs 1 \
-        --report_to none \
         --seed 2212
 )

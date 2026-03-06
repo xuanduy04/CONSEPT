@@ -55,7 +55,7 @@ class _RightPaddingFilter(logging.Filter):
         )
 
 
-logging.getLogger("transformers").addFilter(_RightPaddingFilter())
+logging.getLogger("transformers.generation.utils").addFilter(_RightPaddingFilter())
 
 
 if __name__ == "__main__":
@@ -81,10 +81,12 @@ if __name__ == "__main__":
     ################
     # train_dataset = load_dataset("nvidia/Nemotron-CC-v2", name="HighQuality", split="train[:5%]")
     train_dataset = load_dataset(
-        "nvidia/Nemotron-Pretraining-Dataset-sample", name="Nemotron-CC-High-Quality", split="train"
+        "HuggingFaceTB/cosmopedia", name="openstax", split="train"
     )
 
-    train_dataset = train_dataset.rename_column("text", "solution").remove_columns("id")
+    train_dataset = train_datasettrain_dataset = train_dataset.remove_columns(
+        [c for c in train_dataset.column_names if c != "text"]
+    ).rename_column("text", "solution")
 
     ################
     # Training
