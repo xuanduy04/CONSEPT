@@ -22,10 +22,16 @@ class CONSEPTConfig(GRPOConfig):
     initial_completion_length: Optional[int] = field(
         default=64,
         metadata={
-            "help": "At first, what is the number of tokens that the model will try to generate"
+            "help": "At first, what is the number of tokens that the model will try to generate."
         },
     )
 
+    prompt_length_remove_threshold: Optional[int] = field(
+        default=100,
+        metadata={
+            "help": "If the prompt is less than this number, we remove the sample instead."
+        },
+    )
     # completion_length_factor: Optional[float] = field(
     #     default=2.0,
     #     metadata={

@@ -150,6 +150,7 @@ class CONSEPTTrainer(GRPOTrainer):
         # Dynamic masking
         self.completion_length = multiprocessing.Value("i", self.args.initial_completion_length)
         self._max_completion_length = self.max_completion_length
+        self.prompt_length_remove_threshold = self.args.prompt_length_remove_threshold
 
     # This method overrides `GRPOTrainer.get_train_dataloader` to support dynamic completion length
     # Maintenance note: This method is a copy-paste of the original `GRPOTrainer.get_train_dataloader`
@@ -166,7 +167,9 @@ class CONSEPTTrainer(GRPOTrainer):
             data_collator = self._get_collator_with_removed_columns(data_collator, description="training")
 
         # vvvvvv below is the change
-        data_collator = GetPromptCollator(data_collator, self.processing_class, self.completion_length)
+        data_collator = GetPromptCollator(
+            data_collator, self.processing_class, self.completion_length, self.prompt_length_remove_threshold
+        )
 
         dataloader_params = {
             "batch_size": self._train_batch_size * self.args.steps_per_generation,
@@ -230,4 +233,12 @@ class CONSEPTTrainer(GRPOTrainer):
 
         return prompt_ids, completion_ids, total_completion_tokens, logprobs, forward_kwargs
 
-    # TODO: Add a way to dynamically change the completion length
+    # TODO: Add a way to dynamically change the completion length & save it
+    def _save_checkpoint(self, model, trial):
+        if self.args.hub_model_id is None:
+            model_name = Path(self.args.output_dir).name
+        else:
+            model_name = self.args.hub_model_id.split("/")[-1]
+        self.create_model_card(model_name=model_name)
+        super()._save_checkpoint(model, trial)
+        # Either this or poke into TrainerState (self.state)
