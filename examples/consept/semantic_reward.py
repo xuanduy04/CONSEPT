@@ -66,6 +66,6 @@ def get_semantic_reward(eos_token: str) -> callable:
                 reward = PRUNED_PROMPT_KEY
             rewards.append(reward)
 
-        avg_rewards = float(sum_valid_rewards / valid_prompts)
+        avg_rewards = float(sum_valid_rewards / valid_prompts) if valid_prompts else 0.
         return [reward if reward != PRUNED_PROMPT_KEY else avg_rewards for reward in rewards]
     return semantic_reward
