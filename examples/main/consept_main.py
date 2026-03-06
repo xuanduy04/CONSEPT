@@ -65,7 +65,7 @@ if __name__ == "__main__":
         "nvidia/Nemotron-Pretraining-Dataset-sample", name="Nemotron-CC-High-Quality", split="train"
     )
 
-    train_dataset = train_dataset.rename_column("text", "solution")
+    train_dataset = train_dataset.rename_column("text", "solution").remove_columns("id")
 
     ################
     # Training
