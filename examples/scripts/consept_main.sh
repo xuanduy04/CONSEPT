@@ -18,7 +18,6 @@ PARENT_DIR="$(dirname "$SCRIPT_DIR")"
         --num_generations 4 \
         --gradient_checkpointing false \
         --loss_type dr_grpo \
-        --entropy_coef 0.0 \
         --beta 0.0 \
         --learning_rate 2e-6 \
         --warmup_ratio 0.01 \
