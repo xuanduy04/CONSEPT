@@ -12,7 +12,7 @@ def semantic_reward(completions: list[list[dict[str, str]]], solution: list[str]
             Additional keyword arguments. This function does not use them, but they are required in the function
             signature to ensure compatibility with trainers like [`CONSEPTTrainer`].
     """
-    contents = [completion[0]["content"] for completion in completions]
+    contents = completions
     rewards = []
     for content, solution in zip(contents, solution):
         reward = 1.0  # TODO: implement
