@@ -23,11 +23,11 @@ accelerate launch \
 
 """
 
-
 import torch
 from consept import CONSEPTConfig, CONSEPTTrainer
-from consept.semantic_reward import semantic_reward
+from consept.semantic_reward import get_semantic_reward
 from datasets import load_dataset
+from transformers import AutoTokenizer
 
 from trl import (
     ModelConfig,
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     trainer = CONSEPTTrainer(
         model=model_args.model_name_or_path,
         args=training_args,
-        reward_funcs=semantic_reward,
+        reward_funcs=get_semantic_reward(AutoTokenizer.from_pretrained(model_args.model_name_or_path).eos_token),
         train_dataset=train_dataset,
         eval_dataset=None,
         peft_config=get_peft_config(model_args),
