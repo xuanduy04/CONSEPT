@@ -2,6 +2,8 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
+    from multiprocessing.sharedctypes import Synchronized
+
     from transformers import PreTrainedTokenizerBase
 
 
@@ -12,7 +14,7 @@ class GetPromptCollator:
         self,
         data_collator,
         tokenizer: "PreTrainedTokenizerBase",
-        completion_length,
+        completion_length: "Synchronized[int]",
     ):
         self.data_collator = data_collator
         self.tokenizer = tokenizer
@@ -32,7 +34,7 @@ class GetPromptCollator:
             raise ValueError("Could not find raw text column")
 
         tokens = self.tokenizer.encode(feature[text_column])
-        trimmed_tokens = tokens[: len(tokens) - min(self.completion_length, len(tokens))]
+        trimmed_tokens = tokens[: len(tokens) - min(self.completion_length.value, len(tokens))]
         feature["prompt"] = self.tokenizer.decode(trimmed_tokens)
         return feature
 

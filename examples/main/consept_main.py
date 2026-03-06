@@ -25,6 +25,8 @@ accelerate launch \
 
 
 import torch
+from consept import CONSEPTConfig, CONSEPTTrainer
+from consept.semantic_reward import semantic_reward
 from datasets import load_dataset
 
 from trl import (
@@ -35,9 +37,6 @@ from trl import (
     get_peft_config,
     get_quantization_config,
 )
-
-from ..consept import CONSEPTConfig, CONSEPTTrainer
-from ..consept.semantic_reward import semantic_reward
 
 
 if __name__ == "__main__":
@@ -61,9 +60,9 @@ if __name__ == "__main__":
     ################
     # Dataset
     ################
-    # train_dataset = load_dataset("nvidia/Nemotron-CC-v2", subset="HighQuality", split="train[:5%]")
+    # train_dataset = load_dataset("nvidia/Nemotron-CC-v2", name="HighQuality", split="train[:5%]")
     train_dataset = load_dataset(
-        "nvidia/Nemotron-Pretraining-Dataset-sample", subset="Nemotron-CC-High-Quality", split="train"
+        "nvidia/Nemotron-Pretraining-Dataset-sample", name="Nemotron-CC-High-Quality", split="train"
     )
 
     train_dataset = train_dataset.rename_column("text", "solution")

@@ -5,20 +5,19 @@ PARENT_DIR="$(dirname "$SCRIPT_DIR")"
 
 (
     cd "$PARENT_DIR" || exit 1
-    accelerate launch --config_file accelerate_configs/cpu_only.yaml \
-        python scripts/consept_debug.py
+    PYTHONPATH="$PARENT_DIR" accelerate launch \
+        --config_file accelerate_configs/cpu_only.yaml \
+        main/consept_main.py \
         --model_name_or_path Qwen/Qwen3-0.6B \
-        --output_dir gspo-Qwen3-0.6B \
-        --learning_rate 1e-5 \
-        --dtype bfloat16 \
-        --max_prompt_length 2048 \
+        --output_dir consept-Qwen3-0.6B \
+        --max_prompt_length 9999999 \
         --max_completion_length 1024 \
         --log_completions \
         --per_device_train_batch_size 1 \
-        --num_generations 8 \
+        --gradient_accumulation_steps 4 \
+        --num_generations 4 \
         --epsilon 3e-4 \
         --epsilon_high 4e-4 \
-        --beta 0.0 \
         --loss_type grpo \
-        --gradient_accumulation_steps 2
+        --use_cpu
 )

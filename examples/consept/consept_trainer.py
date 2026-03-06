@@ -82,7 +82,7 @@ from trl.trainer.utils import (
 from trl import GRPOTrainer
 
 from .consept_config import CONSEPTConfig
-from get_prompt_collator import GetPromptCollator
+from .get_prompt_collator import GetPromptCollator
 
 if is_peft_available():
     from peft import PeftConfig, PeftModel
@@ -194,7 +194,7 @@ class CONSEPTTrainer(GRPOTrainer):
         device = self.accelerator.device
         mode = "train" if self.model.training else "eval"
 
-        self.max_completion_length = self.completion_length  # < here is a change
+        self.max_completion_length = self.completion_length.value  # < here is a change
         prompt_ids, completion_ids, logprobs, forward_kwargs = self._generate_single_turn(prompts, images)
         self.max_completion_length = self._max_completion_length  # < here is a change
 
