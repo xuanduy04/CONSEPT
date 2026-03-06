@@ -1,27 +1,35 @@
 """
 accelerate launch \
-    --config_file examples/accelerate_configs/deepspeed_zero3.yaml \
-    examples/scripts/gspo.py \
-    --model_name_or_path Qwen/Qwen3-0.6B \
-    --output_dir gspo-Qwen3-0.6B \
-    --learning_rate 1e-5 \
+    --config_file accelerate_configs/single_gpu.yaml \
+    main/consept_main.py \
+    --model_name_or_path Qwen/Qwen3-0.6B-Base \
+    --output_dir consept-Qwen3-0.6B-Base \
     --dtype bfloat16 \
-    --max_prompt_length 2048 \
     --max_completion_length 1024 \
-    --use_peft \
-    --lora_target_modules "q_proj", "v_proj" \
-    --log_completions \
-    --per_device_train_batch_size 8 \
-    --num_generations 8 \
-    --importance_sampling_level sequence \
-    --epsilon 3e-4 \
-    --epsilon_high 4e-4 \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 4 \
+    --generation_batch_size 16 \
+    --num_generations 4 \
+    --gradient_checkpointing false \
+    --loss_type dr_grpo \
+    --entropy_coef 0.0 \
     --beta 0.0 \
-    --loss_type grpo \
-    --gradient_accumulation_steps 2 \
-    --steps_per_generation 8
+    --learning_rate 2e-6 \
+    --warmup_ratio 0.01 \
+    --max_grad_norm 1.0 \
+    --log_completions true \
+    --num_completions_to_print 3 \
+    --logging_steps 1 \
+    --save_strategy steps \
+    --save_steps 25 \
+    --save_total_limit 5 \
+    --num_train_epochs 1 \
+    --report_to none \
+    --seed 2212
 
 """
+
+import logging
 
 import torch
 from consept import CONSEPTConfig, CONSEPTTrainer
@@ -37,6 +45,17 @@ from trl import (
     get_peft_config,
     get_quantization_config,
 )
+
+
+class _RightPaddingFilter(logging.Filter):
+    def filter(self, record):
+        return (
+            "decoder-only architecture is being used, but right-padding was detected"
+            not in record.getMessage().lower()
+        )
+
+
+logging.getLogger("transformers").addFilter(_RightPaddingFilter())
 
 
 if __name__ == "__main__":
@@ -72,11 +91,10 @@ if __name__ == "__main__":
     ################
     trainer = CONSEPTTrainer(
         model=model_args.model_name_or_path,
-        processing_class=AutoTokenizer.from_pretrained(model_args.model_name_or_path, padding_side='left'),
+        # processing_class=AutoTokenizer.from_pretrained(model_args.model_name_or_path, padding_side="left"),
         args=training_args,
         reward_funcs=get_semantic_reward(AutoTokenizer.from_pretrained(model_args.model_name_or_path).eos_token),
         train_dataset=train_dataset,
-        eval_dataset=None,
         peft_config=get_peft_config(model_args),
     )
 

@@ -24,11 +24,11 @@ PARENT_DIR="$(dirname "$SCRIPT_DIR")"
         --warmup_ratio 0.01 \
         --max_grad_norm 1.0 \
         --log_completions true \
-        --num_completions_to_print 3 \
-        --logging_steps 1 \
+        --num_completions_to_print 1 \
+        --logging_steps 10 \
         --save_strategy steps \
-        --save_steps 5 \
-        --save_total_limit 5 \
+        --save_steps 100 \
+        --save_total_limit 100 \
         --num_train_epochs 1 \
         --report_to none \
         --seed 2212
