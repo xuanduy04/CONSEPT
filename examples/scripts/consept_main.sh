@@ -20,6 +20,7 @@ PARENT_DIR="$(dirname "$SCRIPT_DIR")"
         --loss_type dr_grpo \
         --beta 0.0 \
         --learning_rate 2e-6 \
+        --max_step 100_000 \
         --warmup_ratio 0.01 \
         --max_grad_norm 1.0 \
         --log_completions true \

@@ -7,7 +7,7 @@
 <hr> <br>
 
 <h3 align="center">
-    <p>A comprehensive library to post-train foundation models</p>
+    <p>Yet another fork of TRL - a comprehensive library to post-train foundation models</p>
 </h3>
 
 <p align="center">

@@ -1,3 +1,4 @@
+# NOTE: This function, I have yet to change (much, if anything) for the original huggingface code
 import random
 from typing import Optional
 
