@@ -86,7 +86,7 @@ if __name__ == "__main__":
 
     train_dataset = train_datasettrain_dataset = train_dataset.remove_columns(
         [c for c in train_dataset.column_names if c != "text"]
-    ).rename_column("text", "solution")
+    )
 
     ################
     # Training

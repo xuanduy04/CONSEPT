@@ -1,8 +1,11 @@
-from collections.abc import Sized
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import torch
 from torch.utils.data import Sampler
+
+
+if TYPE_CHECKING:
+    from datasets import Dataset
 
 
 class DynamicRepeatSampler(Sampler):
@@ -11,7 +14,7 @@ class DynamicRepeatSampler(Sampler):
     This is *dynamic*, i.e. will only return samples deemed valid by a function.
 
     Args:
-        data_source (`Sized`):
+        data_source (`datasets.Dataset`):
             Dataset to sample from.
         valid_item_fn(`Callable[[Any], bool],`):
             Function that inputs an item and returns whether this item is valid for sampling
@@ -25,17 +28,20 @@ class DynamicRepeatSampler(Sampler):
             Whether to shuffle the dataset.
         seed (`int`, *optional*):
             Random seed for reproducibility (only affects this sampler).
+        text_column (`str`, *optional*, defaults to 'text'):
+            The `data_source`'s column to sample from (and check validity of).
     """
 
     def __init__(
         self,
-        data_source: Sized,
+        data_source: "Dataset",
         valid_item_fn: Callable[[Any], bool],
         mini_repeat_count: int = 1,
         batch_size: int = 1,
         repeat_count: int = 1,
         shuffle: bool = True,
         seed: Optional[int] = None,
+        text_column: str = "text",
     ):
         self.data_source = data_source
         self.is_valid_item = valid_item_fn
@@ -45,6 +51,7 @@ class DynamicRepeatSampler(Sampler):
         self.num_samples = len(data_source)
         self.shuffle = shuffle
         self.seed = seed
+        self.text_column = text_column
 
         if shuffle:
             self.generator = torch.Generator()  # Create a local random generator
@@ -60,7 +67,7 @@ class DynamicRepeatSampler(Sampler):
 
         batch = []
         for index in indexes:
-            if self.is_valid_item(self.data_source[index]["text"]):
+            if self.is_valid_item(self.data_source[self.text_column][index]):
                 batch.append(index)
             if len(batch) == self.batch_size:
                 # Same as original RepeatSampler
@@ -74,7 +81,7 @@ class DynamicRepeatSampler(Sampler):
     def __len__(self):
         raise TypeError(
             "DynamicSampler cannot pre-determine the number of valid samples,"
-            "as `valid_item_fn` can change during runtime."
+            "as `valid_item_fn` can change (to be more and more restrictive) during runtime."
         )
 
 
