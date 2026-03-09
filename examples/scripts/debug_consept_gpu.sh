@@ -28,6 +28,6 @@ PARENT_DIR="$(dirname "$SCRIPT_DIR")"
         --save_strategy steps \
         --save_steps 5 \
         --save_total_limit 5 \
-        --num_train_epochs 1 \
+        --max_steps 100 \
         --seed 2212
 )

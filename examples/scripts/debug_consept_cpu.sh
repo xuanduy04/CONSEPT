@@ -11,12 +11,21 @@ PARENT_DIR="$(dirname "$SCRIPT_DIR")"
         --model_name_or_path Qwen/Qwen3-0.6B-Base \
         --output_dir consept-Qwen3-0.6B-Base \
         --max_completion_length 1024 \
-        --log_completions \
         --per_device_train_batch_size 1 \
-        --gradient_accumulation_steps 2 \
+        --gradient_accumulation_steps 1 \
+        --generation_batch_size 2 \
         --num_generations 2 \
-        --epsilon 3e-4 \
-        --epsilon_high 4e-4 \
-        --loss_type grpo \
+        --gradient_checkpointing false \
+        --loss_type dr_grpo \
+        --learning_rate 2e-6 \
+        --warmup_ratio 0.01 \
+        --max_grad_norm 1.0 \
+        --log_completions true \
+        --num_completions_to_print 3 \
+        --logging_steps 1 \
+        --save_strategy steps \
+        --save_steps 5 \
+        --save_total_limit 5 \
+        --max_steps 100 \
         --use_cpu
 )

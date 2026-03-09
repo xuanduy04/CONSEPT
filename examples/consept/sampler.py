@@ -71,6 +71,12 @@ class DynamicRepeatSampler(Sampler):
                 # Reset batch
                 batch = []
 
+    def __len__(self):
+        raise TypeError(
+            "DynamicSampler cannot pre-determine the number of valid samples,"
+            "as `valid_item_fn` can change during runtime."
+        )
+
 
 if __name__ == "__main__":
     import multiprocessing
@@ -80,25 +86,22 @@ if __name__ == "__main__":
     from torch.utils.data import DataLoader
     from transformers import AutoTokenizer
 
-
     prompt_length_remove_threshold = 100
     completion_length = multiprocessing.Value("i", 1000)
     processing_class = AutoTokenizer.from_pretrained("Qwen/Qwen3-0.6B-Base")
+
     def valid_item_fn(item: str) -> bool:
         tokens = processing_class.encode(item)
         return len(tokens) - completion_length.value <= prompt_length_remove_threshold
 
-    train_dataset = load_dataset(
-        "HuggingFaceTB/cosmopedia", name="openstax", split="train"
-    )
+    train_dataset = load_dataset("HuggingFaceTB/cosmopedia", name="openstax", split="train")
     train_dataset = train_dataset.remove_columns([c for c in train_dataset.column_names if c != "text"])
 
-    data_loader = DataLoader(train_dataset,
-                             sampler=DynamicRepeatSampler(train_dataset, valid_item_fn=valid_item_fn))
+    data_loader = DataLoader(train_dataset, sampler=DynamicRepeatSampler(train_dataset, valid_item_fn=valid_item_fn))
 
     for i, data in enumerate(data_loader):
         tokenized_length_data = dict()
-        for k,v in data.items():
+        for k, v in data.items():
             tokenized_length_data[k] = len(processing_class.encode(v))
 
         pprint(tokenized_length_data)
