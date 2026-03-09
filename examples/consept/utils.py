@@ -1,4 +1,3 @@
-# NOTE: This function, I have yet to change (much, if anything) for the original huggingface code
 import random
 from typing import Optional
 
@@ -17,10 +16,11 @@ if is_rich_available():
 def print_prompt_text_completions_sample(
     prompts: list,
     completions: list,
+    solutions: list,
     rewards: dict[str, list[float]],
     advantages: list[float],
     step: int,
-    eos_token: str,
+    eos_token: int,
     num_samples: Optional[int] = None,
 ) -> None:
     """
@@ -34,14 +34,16 @@ def print_prompt_text_completions_sample(
             List of prompts.
         completions (`list`):
             List of completions corresponding to the prompts.
+        solutions (`list`):
+            List of solutions corresponding to the prompts.
         rewards (`dict[str, list[float]]`):
             Dictionary where keys are reward names and values are lists of rewards.
         advantages (`list[float]`):
             List of advantages corresponding to the prompts and completions.
         step (`int`):
             Current training step number, used in the output title.
-        eos_token (`str`):
-            The tokenizer's end-of-sentence token, to not print empty samples
+        eos_token (`int`):
+            The tokenizer's end-of-sentence token, as to not print empty samples
         num_samples (`int`, *optional*):
             Number of random samples to display. If `None` (default), all items will be displayed.
 
@@ -72,9 +74,10 @@ def print_prompt_text_completions_sample(
         )
 
     # filter empty prompts
-    valid_prompt_indices = [i for i, prompt in enumerate(prompts) if prompt != eos_token]
+    valid_prompt_indices = [i for i, prompt in enumerate(prompts) if prompt != str(eos_token)]
     prompts = [prompts[i] for i in valid_prompt_indices]
     completions = [completions[i] for i in valid_prompt_indices]
+    solutions = [solutions[i] for i in valid_prompt_indices]
     rewards = {key: [val[i] for i in valid_prompt_indices] for key, val in rewards.items()}
     advantages = [advantages[i] for i in valid_prompt_indices]
 
@@ -83,12 +86,13 @@ def print_prompt_text_completions_sample(
     table = Table(show_header=True, header_style="bold white", expand=True)
 
     if len(prompts) == 0:
-        console.print("This sample has only empty prompts")
+        console.print("This sample has only empty prompts, skipping logs")
         return
 
     # Add columns
     table.add_column("Prompt", style="bright_yellow")
     table.add_column("Completion", style="bright_green")
+    table.add_column("Solution", style="bright_cyan")
     for reward_name in rewards.keys():
         table.add_column(reward_name, style="bold cyan", justify="right")
     table.add_column("Advantage", style="bold magenta", justify="right")
@@ -127,6 +131,7 @@ def print_prompt_text_completions_sample(
         indices = random.sample(range(len(prompts)), num_samples)
         prompts = [prompts[i] for i in indices]
         completions = [completions[i] for i in indices]
+        solutions = [solutions[i] for i in indices]
         rewards = {key: [val[i] for i in indices] for key, val in rewards.items()}
         advantages = [advantages[i] for i in indices]
 
@@ -135,6 +140,7 @@ def print_prompt_text_completions_sample(
         table.add_row(
             format_entry(prompts[i]),
             format_entry(completions[i]),
+            format_entry(solutions[i]),
             *reward_values,
             f"{advantages[i]:.2f}",
         )

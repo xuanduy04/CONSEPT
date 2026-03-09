@@ -81,7 +81,7 @@ if __name__ == "__main__":
     ################
     # train_dataset = load_dataset("nvidia/Nemotron-CC-v2", name="HighQuality", split="train[:5%]")
     train_dataset = load_dataset(
-        "HuggingFaceTB/cosmopedia", name="openstax", split="train"
+        "HuggingFaceTB/cosmopedia", name="openstax", split="train[:5%]"
     )
 
     train_dataset = train_datasettrain_dataset = train_dataset.remove_columns(

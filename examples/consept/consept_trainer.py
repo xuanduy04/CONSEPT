@@ -148,6 +148,8 @@ class CONSEPTTrainer(GRPOTrainer):
             optimizers=optimizers,
             peft_config=peft_config,
         )
+        # Keep logs sized to the generation batch to record only outputs from the latest model update.
+        self._logs["solution"] = deque(maxlen=args.generation_batch_size)
 
         # Dynamic masking
         self.completion_length = multiprocessing.Value("i", self.args.initial_completion_length)
@@ -255,6 +257,14 @@ class CONSEPTTrainer(GRPOTrainer):
 
         return prompt_ids, completion_ids, total_completion_tokens, logprobs, forward_kwargs
 
+    def _generate_and_score_completions(
+        self, inputs: list[dict[str, Union[torch.Tensor, Any]]]
+    ) -> dict[str, Union[torch.Tensor, Any]]:
+        # `GRPOTrainer._generate_and_score_completions`, but adds ground truths to logs
+        output = super()._generate_and_score_completions(inputs=inputs)
+        self._logs["solution"].extend(gather_object([x["solution"] for x in inputs]))
+        return output
+
     # This method overrides `GRPOTrainer.log` to support our logging (as we do not use chat template)
     # Maintenance note: This method is a copy-paste of the original `GRPOTrainer.logging`
     # with only one modification (changing the terminal printing function).
@@ -273,15 +283,18 @@ class CONSEPTTrainer(GRPOTrainer):
 
         if self.accelerator.is_main_process and self.log_completions:
             if is_rich_available():
-                print_prompt_text_completions_sample(  # < here is the change
+                # vvvvvv Here is the change
+                print_prompt_text_completions_sample(
                     self._logs["prompt"],
                     self._logs["completion"],
+                    self._logs["solution"],
                     self._logs["rewards"],
                     self._logs["advantages"],
                     self.state.global_step,
                     self.processing_class.eos_token,
                     self.num_completions_to_print,
                 )
+                # ^^^^^^
 
             if self.args.report_to and "wandb" in self.args.report_to and wandb.run is not None:
                 import pandas as pd
