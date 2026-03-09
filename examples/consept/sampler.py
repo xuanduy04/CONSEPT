@@ -10,8 +10,9 @@ if TYPE_CHECKING:
 
 class DynamicRepeatSampler(Sampler):
     """
+    Similar to `trl.utils.RepeatSampler`, but is *dynamic* - i.e. will always return samples deemed valid by a changing function.
+
     Sampler that repeats the indices of a dataset in a structured manner.
-    This is *dynamic*, i.e. will only return samples deemed valid by a function.
 
     Args:
         data_source (`datasets.Dataset`):

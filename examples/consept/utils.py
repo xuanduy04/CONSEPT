@@ -13,17 +13,19 @@ if is_rich_available():
     from rich.text import Text
 
 
-def print_prompt_text_completions_sample(
+def print_prompt_completion_solutions_sample(
     prompts: list,
     completions: list,
     solutions: list,
     rewards: dict[str, list[float]],
     advantages: list[float],
     step: int,
-    eos_token: int,
+    eos_token: str,
     num_samples: Optional[int] = None,
 ) -> None:
     """
+    Similar to `trl.utils.print_prompt_completions_sample`, but additionally prints each prompts solutions.
+
     Print out a sample of model completions to the console with multiple reward metrics.
 
     This function creates a nicely formatted table showing prompt-completion pairs, useful for monitoring model outputs
@@ -69,7 +71,7 @@ def print_prompt_text_completions_sample(
     """
     if not is_rich_available():
         raise ImportError(
-            "The function `print_prompt_text_completions_sample` requires the `rich` library. Please install it with "
+            "The function `print_prompt_completion_solutions_sample` requires the `rich` library. Please install it with "
             "`pip install rich`."
         )
 

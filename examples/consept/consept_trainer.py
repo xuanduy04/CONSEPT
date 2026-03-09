@@ -84,7 +84,7 @@ from trl import GRPOTrainer
 from .consept_config import CONSEPTConfig
 from .sampler import DynamicRepeatSampler
 from .collator import PromptSolutionCollator
-from .utils import print_prompt_text_completions_sample
+from .utils import print_prompt_completion_solutions_sample
 
 if is_peft_available():
     from peft import PeftConfig, PeftModel
@@ -152,9 +152,12 @@ class CONSEPTTrainer(GRPOTrainer):
         self._logs["solution"] = deque(maxlen=args.generation_batch_size)
 
         # Dynamic masking
-        self.completion_length = multiprocessing.Value("i", self.args.initial_completion_length)
         self._max_completion_length = self.max_completion_length
         self.prompt_length_remove_threshold = self.args.prompt_length_remove_threshold
+        self.completion_length = multiprocessing.Value("i", self.args.initial_completion_length)
+        # ^^^^^^ This value is synced across workers to ensure the DataLoader only returns samples that satisfies our dynamically changing constraint.
+        self._update_max_completion_length(self.args.initial_completion_length)
+        # NOTE! Because of backwards compatibility, please never use the variable `max_completion_length` directly
 
     # This method overrides `GRPOTrainer.get_train_dataloader` to support dynamic completion length
     # Maintenance note: This method is a copy-paste of the original `GRPOTrainer.get_train_dataloader`
@@ -214,60 +217,25 @@ class CONSEPTTrainer(GRPOTrainer):
             seed=self.args.seed,
         )
 
-    # This method overrides `GRPO._generate` to support dynamic completion length
-    # Maintenance note: This method is a copy-paste of the original `GRPO._generate`
-    # with only 2 line modifications.
-    def _generate(self, prompts: list[str], images: Optional[list]):
-        device = self.accelerator.device
-        mode = "train" if self.model.training else "eval"
-
-        self.max_completion_length = self.completion_length.value  # < here is a change
-        prompt_ids, completion_ids, logprobs, forward_kwargs = self._generate_single_turn(prompts, images)
-        self.max_completion_length = self._max_completion_length  # < here is a change
-
-        # Get completion length per sequence, used for logging
-        prompt_lengths = torch.tensor([len(ids) for ids in prompt_ids], device=device)
-        completion_lengths = torch.tensor([len(ids) for ids in completion_ids], device=device)
-        agg_prompt_lengths = self.accelerator.gather(prompt_lengths)
-        agg_completion_lengths = self.accelerator.gather(completion_lengths)
-        total_prompt_tokens = agg_prompt_lengths.sum()
-        total_completion_tokens = agg_completion_lengths.sum()  # = num_items_in_batch, required for the DAPO loss
-
-        # Log the metrics
-        if mode == "train":
-            self.state.num_input_tokens_seen += (total_prompt_tokens + total_completion_tokens).item()
-        self._metrics[mode]["num_tokens"] = [self.state.num_input_tokens_seen]
-
-        # Log completion lengths, mean, min, max
-        self._metrics[mode]["completions/mean_length"].append(agg_completion_lengths.float().mean().item())
-        self._metrics[mode]["completions/min_length"].append(agg_completion_lengths.float().min().item())
-        self._metrics[mode]["completions/max_length"].append(agg_completion_lengths.float().max().item())
-
-        # Identify sequences that terminated with EOS and log their lengths
-        eos_and_pad = [self.eos_token_id, self.pad_token_id]
-        is_truncated = torch.tensor([ids[-1] not in eos_and_pad for ids in completion_ids], device=device)
-        agg_is_truncated = self.accelerator.gather(is_truncated)
-        self._metrics[mode]["completions/clipped_ratio"].append(agg_is_truncated.float().mean().item())
-        term_completion_lengths = agg_completion_lengths[~agg_is_truncated]
-        if len(term_completion_lengths) == 0:  # edge case where no terminated sequences are found
-            term_completion_lengths = torch.zeros(1, device=device)
-        self._metrics[mode]["completions/mean_terminated_length"].append(term_completion_lengths.float().mean().item())
-        self._metrics[mode]["completions/min_terminated_length"].append(term_completion_lengths.float().min().item())
-        self._metrics[mode]["completions/max_terminated_length"].append(term_completion_lengths.float().max().item())
-
-        return prompt_ids, completion_ids, total_completion_tokens, logprobs, forward_kwargs
+    def _update_max_completion_length(self, value: int):
+        # Change completion length, ensuring that new samples & generations abide by this new value
+        self.completion_length.value = value
+        self.max_completion_length = value
+        if not self.use_vllm:
+            self.generation_config.update(max_new_tokens=value)
 
     def _generate_and_score_completions(
         self, inputs: list[dict[str, Union[torch.Tensor, Any]]]
     ) -> dict[str, Union[torch.Tensor, Any]]:
-        # `GRPOTrainer._generate_and_score_completions`, but adds ground truths to logs
+        # Does exactly the same as `GRPOTrainer._generate_and_score_completions`
         output = super()._generate_and_score_completions(inputs=inputs)
+        # but adds ground truths to logs
         self._logs["solution"].extend(gather_object([x["solution"] for x in inputs]))
         return output
 
     # This method overrides `GRPOTrainer.log` to support our logging (as we do not use chat template)
-    # Maintenance note: This method is a copy-paste of the original `GRPOTrainer.logging`
-    # with only one modification (changing the terminal printing function).
+    # Maintenance note: This method is a copy-paste of the original `GRPOTrainer.log`
+    # with only one modification (changing the terminal/ console logging function).
     def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
         mode = "train" if self.model.training else "eval"
         metrics = {key: sum(val) / len(val) for key, val in self._metrics[mode].items()}  # average the metrics
@@ -284,7 +252,7 @@ class CONSEPTTrainer(GRPOTrainer):
         if self.accelerator.is_main_process and self.log_completions:
             if is_rich_available():
                 # vvvvvv Here is the change
-                print_prompt_text_completions_sample(
+                print_prompt_completion_solutions_sample(
                     self._logs["prompt"],
                     self._logs["completion"],
                     self._logs["solution"],
@@ -319,11 +287,3 @@ class CONSEPTTrainer(GRPOTrainer):
                 wandb.log({"completions": wandb.Table(dataframe=df)})
 
     # TODO: Add a way to dynamically change the completion length & save it
-    def _save_checkpoint(self, model, trial):
-        if self.args.hub_model_id is None:
-            model_name = Path(self.args.output_dir).name
-        else:
-            model_name = self.args.hub_model_id.split("/")[-1]
-        self.create_model_card(model_name=model_name)
-        super()._save_checkpoint(model, trial)
-        # Either this or poke into TrainerState (self.state)
