@@ -34,7 +34,7 @@ OUTPUT_DIR="$PARENT_DIR/sft-$RUN_NAME"
         --save_strategy steps \
         --save_steps 500 \
         --dtype bfloat16 \
-        --steaming true \
+        --streaming true \
         --packing true \
         --attn_implementation 'flash_attention_2' \
         --report_to tensorboard \
