@@ -1,9 +1,12 @@
+from dataclasses import dataclass
+
 import torch
 from datasets import load_dataset
 
 from trl import ModelConfig, ScriptArguments, SFTConfig, SFTTrainer, TrlParser
 
 
+@dataclass
 class DatasetConfig:
     dataset_path: str
     streaming: bool = True
@@ -26,23 +29,17 @@ if __name__ == "__main__":
     # Dataset
     ################
     train_dataset = load_dataset(
-        "json",
-        data_files=dataset_args.dataset_path,
-        split="train",
-        streaming=dataset_args.streaming
+        "json", data_files=dataset_args.dataset_path, split="train", streaming=dataset_args.streaming
     )
 
-    train_dataset = train_dataset.remove_columns(
-        [c for c in train_dataset.column_names if c != "text"]
-    )
+    train_dataset = train_dataset.select_columns(["text"])
 
     ################
     # Training
     ################
-    trainer = SFTTrainer(
-        model=model_args.model_name_or_path,
-        args=training_args,
-        train_dataset=train_dataset
+    training_args.accelerator_config.dispatch_batches = False
+    trainer = SFTTrainer(model=model_args.model_name_or_path, args=training_args, train_dataset=train_dataset)
+    trainer.train(
+        resume_from_checkpoint=training_args.resume_from_checkpoint if training_args.resume_from_checkpoint else None
     )
-    trainer.train(resume_from_checkpoint=training_args.resume_from_checkpoint)
     trainer.save_model(training_args.output_dir)
