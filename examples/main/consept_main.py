@@ -3,6 +3,11 @@ from dataclasses import dataclass
 
 import torch
 from consept import CONSEPTConfig, CONSEPTTrainer
+from consept.completion_length_scheduler import (
+    ConstantCompletionLengthScheduler,
+    IncreaseCompletionLengthOnVictory,
+    StepCompletionLengthScheduler,
+)
 from consept.semantic_reward import get_semantic_reward
 from datasets import load_dataset
 from transformers import AutoTokenizer
@@ -14,7 +19,7 @@ from trl import (
 )
 
 
-class _RightPaddingFilter(logging.Filter):
+class _RightPaddingLogFilter(logging.Filter):
     def filter(self, record):
         return (
             "decoder-only architecture is being used, but right-padding was detected"
@@ -22,7 +27,7 @@ class _RightPaddingFilter(logging.Filter):
         )
 
 
-logging.getLogger("transformers.generation.utils").addFilter(_RightPaddingFilter())
+logging.getLogger("transformers.generation.utils").addFilter(_RightPaddingLogFilter())
 
 
 @dataclass
@@ -58,15 +63,12 @@ if __name__ == "__main__":
     ################
     trainer = CONSEPTTrainer(
         model=model_args.model_name_or_path,
-        # processing_class=AutoTokenizer.from_pretrained(model_args.model_name_or_path, padding_side="left"),
         args=training_args,
         reward_funcs=get_semantic_reward(AutoTokenizer.from_pretrained(model_args.model_name_or_path).eos_token),
         train_dataset=train_dataset,
     )
 
-    trainer.train()
-
-    # Save and push to hub
+    trainer.train(
+        resume_from_checkpoint=training_args.resume_from_checkpoint if training_args.resume_from_checkpoint else None
+    )
     trainer.save_model(training_args.output_dir)
-    if training_args.push_to_hub:
-        trainer.push_to_hub(dataset_name=script_args.dataset_name)

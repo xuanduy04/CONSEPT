@@ -19,7 +19,7 @@ from collections import defaultdict, deque
 from contextlib import nullcontext
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Union, TYPE_CHECKING
 
 import multiprocessing
 
@@ -79,12 +79,15 @@ from trl.trainer.utils import (
     unsplit_pixel_values_by_grid,
 )
 
-from trl import GRPOTrainer
+from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR, TrainOutput
 
+from trl import GRPOTrainer
+from .completion_length_scheduler import ConstantCompletionLengthScheduler
 from .consept_config import CONSEPTConfig
 from .sampler import DynamicRepeatSampler
 from .collator import PromptSolutionCollator
-from .utils import print_prompt_completion_solutions_sample
+from .log_samples import print_prompt_completion_solutions_sample
+from .utils import save_dict_to_json, load_dict_from_json
 
 if is_peft_available():
     from peft import PeftConfig, PeftModel
@@ -100,19 +103,98 @@ if is_wandb_available():
     import wandb
 
 
+if TYPE_CHECKING:
+    from multiprocessing.sharedctypes import Synchronized
+    import optuna
+    from trl.trainer.grpo_trainer import RewardFunc
+    from .completion_length_scheduler import CompletionLengthScheduler
+
+
 logger = logging.get_logger(__name__)
 
-# What we call a reward function is a callable that takes a list of prompts and completions and returns a list of
-# rewards. When it's a string, it's a model ID, so it's loaded as a pretrained model.
-RewardFunc = Union[str, PreTrainedModel, Callable[[list, list], list[float]]]
+# Name of the files used for checkpointing
+COMPLETION_LENGTH_SCHEDULER_NAME = "completion_length_scheduler.pt"
 
 
 class CONSEPTTrainer(GRPOTrainer):
     r"""
-    CONtiual SEmantic PreTraining
+    CONtiual SEmantic PreTraining's Trainer.
 
     Args:
-        TBD
+        model (`Union[str, PreTrainedModel]`):
+            Model to be trained. Can be either:
+
+            - A string, being the *model id* of a pretrained model hosted inside a model repo on huggingface.co, or a
+              path to a *directory* containing model weights saved using
+              [`~transformers.PreTrainedModel.save_pretrained`], e.g., `'./my_model_directory/'`. The model is loaded
+              using [`~transformers.AutoModelForCausalLM.from_pretrained`] with the keyword arguments in
+              `args.model_init_kwargs`.
+            - A [`~transformers.PreTrainedModel`] object. Only causal language models are supported.
+        reward_funcs (`Union[RewardFunc, list[RewardFunc]]`):
+            Reward functions to be used for computing the rewards. To compute the rewards, we call all the reward
+            functions with the prompts and completions and sum the rewards. Can be either:
+
+            - A single reward function, such as:
+                - A string: The *model ID* of a pretrained model hosted inside a model repo on huggingface.co, or a
+                path to a *directory* containing model weights saved using
+                [`~transformers.PreTrainedModel.save_pretrained`], e.g., `'./my_model_directory/'`. The model is loaded
+                using [`~transformers.AutoModelForSequenceClassification.from_pretrained`] with `num_labels=1` and the
+                keyword arguments in `args.model_init_kwargs`.
+                - A [`~transformers.PreTrainedModel`] object: Only sequence classification models are supported.
+                - A custom reward function: The function is provided with the prompts and the generated completions,
+                  plus any additional columns in the dataset. It should return a list of rewards. Custom reward
+                  functions can also return `None` when the reward is not applicable to those samples. This is useful
+                  for multi-task training where different reward functions apply to different types of samples. When a
+                  reward function returns `None` for a sample, that reward function is excluded from the reward
+                  calculation for that sample. For more details, see [Using a custom reward
+                  function](#using-a-custom-reward-function).
+
+                  The trainer's state is also passed to the reward function. The trainer's state is an instance of
+                  [`~transformers.TrainerState`] and can be accessed by accessing the `trainer_state` argument to the
+                  reward function's signature.
+            - A list of reward functions, where each item can independently be any of the above types. Mixing different
+            types within the list (e.g., a string model ID and a custom reward function) is allowed.
+        args ([`CONSEPTConfig`], *optional*):
+            Configuration for this trainer. If `None`, a default configuration is used.
+        completion_length_scheduler_cls: (type["CompletionLengthScheduler"], *optional*):
+            The `completion_length_scheduler` class. If `None`, the `completion_length` will never change during training.
+        completion_length_scheduler_kwargs: (dict[str, Any], *optional*):
+            Additional keyword arguments for the `completion_length_scheduler` to use during its initialization.
+        train_dataset ([`~datasets.Dataset`] or [`~datasets.IterableDataset`]):
+            Dataset to use for training. It must include a column `"text"`. Any additional columns in the dataset is
+            ignored. The format of the samples can be either:
+
+            - [Standard](dataset_formats#standard): Each sample contains plain text.
+            - [Conversational](dataset_formats#conversational): Each sample contains structured messages (e.g., role
+              and content).
+        eval_dataset ([`~datasets.Dataset`], [`~datasets.IterableDataset`] or `dict[str, Union[Dataset, IterableDataset]]`):
+            Dataset to use for evaluation. It must meet the same requirements as `train_dataset`.
+        processing_class ([`~transformers.PreTrainedTokenizerBase`], [`~transformers.ProcessorMixin`], *optional*):
+            Processing class used to process the data. The padding side must be set to "left". If `None`, the
+            processing class is loaded from the model's name with [`~transformers.AutoProcessor.from_pretrained`]. A
+            padding token, `tokenizer.pad_token`, must be set. If the processing class has not set a padding token,
+            `tokenizer.eos_token` will be used as the default.
+        reward_processing_classes ([`~transformers.PreTrainedTokenizerBase`] or `list[PreTrainedTokenizerBase]`, *optional*):
+            Processing classes corresponding to the reward functions specified in `reward_funcs`. Can be either:
+
+            - A single processing class: Used when `reward_funcs` contains only one reward function.
+            - A list of processing classes: Must match the order and length of the reward functions in `reward_funcs`.
+            If set to `None`, or if an element of the list corresponding to a [`~transformers.PreTrainedModel`] is
+            `None`, the tokenizer for the model is automatically loaded using
+            [`~transformers.AutoTokenizer.from_pretrained`]. For elements in `reward_funcs` that are custom reward
+            functions (not [`~transformers.PreTrainedModel`]), the corresponding entries in `reward_processing_classes`
+            are ignored.
+        callbacks (list of [`~transformers.TrainerCallback`], *optional*):
+            List of callbacks to customize the training loop. Will add those to the list of default callbacks detailed
+            in [here](https://huggingface.co/docs/transformers/main_classes/callback).
+
+            If you want to remove one of the default callbacks used, use the [`~transformers.Trainer.remove_callback`]
+            method.
+        optimizers (`tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR]`, *optional*, defaults to `(None, None)`):
+            A tuple containing the optimizer and the scheduler to use. Will default to an instance of [`AdamW`] on your
+            model and a scheduler given by [`get_linear_schedule_with_warmup`] controlled by `args`.
+        peft_config ([`~peft.PeftConfig`], *optional*):
+            PEFT configuration used to wrap the model. If `None`, the model is not wrapped.
     """
 
     _name = "CONSEPT"
@@ -120,8 +202,10 @@ class CONSEPTTrainer(GRPOTrainer):
     def __init__(
         self,
         model: Union[str, PreTrainedModel],
-        reward_funcs: Union[RewardFunc, list[RewardFunc]],
+        reward_funcs: Union["RewardFunc", list["RewardFunc"]],
         args: Optional[CONSEPTConfig] = None,
+        completion_length_scheduler_cls: Optional[type["CompletionLengthScheduler"]] = None,
+        completion_length_scheduler_kwargs: Optional[dict[str, Any]] = None,
         train_dataset: Optional[Union[Dataset, IterableDataset]] = None,
         eval_dataset: Optional[Union[Dataset, IterableDataset, dict[str, Union[Dataset, IterableDataset]]]] = None,
         processing_class: Optional[Union[PreTrainedTokenizerBase, ProcessorMixin]] = None,
@@ -134,7 +218,7 @@ class CONSEPTTrainer(GRPOTrainer):
         if args is None:
             model_name = model if isinstance(model, str) else model.config._name_or_path
             model_name = model_name.split("/")[-1]
-            args = CONSEPTConfig(f"{model_name}-CONSEPT")
+            args = CONSEPTConfig(output_dir=f"{model_name}-CONSEPT")
 
         super().__init__(
             model=model,
@@ -151,14 +235,136 @@ class CONSEPTTrainer(GRPOTrainer):
         # Keep logs sized to the generation batch to record only outputs from the latest model update.
         self._logs["solution"] = deque(maxlen=args.generation_batch_size)
 
-        # Dynamic masking
+        # Dynamically changing the completion length during training
         self._max_completion_length = self.max_completion_length
         self.prompt_length_remove_threshold = self.args.prompt_length_remove_threshold
-        self.completion_length = multiprocessing.Value("i", self.args.initial_completion_length)
-        # ^^^^^^ This value is synced across workers to ensure the DataLoader only returns samples that satisfies our dynamically changing constraint.
-        self._update_max_completion_length(self.args.initial_completion_length)
+        # vvvvvv This value is synced across workers to ensure the DataLoader only returns samples that satisfies our dynamically changing constraint.
+        self.current_completion_length: "Synchronized" = multiprocessing.Value(
+            "i", self.args.initial_completion_length
+        )
+        # ^^^^^^
+        self._set_max_completion_length()
         # NOTE! Because of backwards compatibility, please never use the variable `max_completion_length` directly
 
+        if completion_length_scheduler_cls is None:
+            # if no scheduler class is specified, the completion length will never change
+            completion_length_scheduler_cls = ConstantCompletionLengthScheduler
+        elif completion_length_scheduler_kwargs is None:
+            completion_length_scheduler_kwargs = {}
+
+        self.completion_length_scheduler: "CompletionLengthScheduler" = self.completion_length_scheduler_cls(
+            completion_length=self.completion_length,
+            max_completion_length=self._max_completion_length,
+            **completion_length_scheduler_kwargs,
+        )
+
+    # ================== SAVE completion_length_scheduler ================== #
+    def _save_completion_length_scheduler(self, run_dir: str) -> None:
+        """Saves the `completion_length_scheduler` at the same place as model checkpoints & training args"""
+        checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-{self.state.global_step}"
+        output_dir = os.path.join(run_dir, checkpoint_folder)
+        torch.save(self.lr_scheduler.state_dict(), os.path.join(output_dir, COMPLETION_LENGTH_SCHEDULER_NAME))
+
+    def _maybe_log_save_evaluate(
+        self,
+        tr_loss: torch.Tensor,
+        grad_norm: torch.Tensor | float | None,
+        model: nn.Module,
+        trial: "optuna.Trial | dict[str, Any] | None",
+        epoch: float,
+        ignore_keys_for_eval: list[str] | None,
+        start_time: float,
+        learning_rate: float | None = None,
+    ) -> None:
+        if self.control.should_save and self.args.should_save and (not self.args.save_only_model):
+            # according to super()._maybe_log_save_evaluate(...), this is the complete save condition
+            run_dir = self._get_output_dir(trial=trial)
+            self._save_completion_length_scheduler(run_dir=run_dir)
+
+        super()._maybe_log_save_evaluate(
+            tr_loss=tr_loss,
+            grad_norm=grad_norm,
+            model=model,
+            trial=trial,
+            epoch=epoch,
+            ignore_keys_for_eval=ignore_keys_for_eval,
+            start_time=start_time,
+            learning_rate=learning_rate,
+        )
+        # NOTE: IDEA! maybe we update the completion length HERE!!!
+        # Treat it as an... evaluation, ya know?
+        self.completion_length_scheduler.step(metrics=self._logs["rewards"])
+
+    # ================== LOAD completion_length_scheduler ================== #
+    # These next 2 functions loads the completion_length_scheduler
+    def _prepare_for_training(self, max_steps, train_dataloader, resume_from_checkpoint):
+        output = super()._prepare_for_training(
+            max_steps=max_steps, train_dataloader=train_dataloader, resume_from_checkpoint=resume_from_checkpoint
+        )
+        if resume_from_checkpoint is not None and resume_from_checkpoint is not False:
+            self._load_completion_length_scheduler(resume_from_checkpoint)
+        return output
+
+    def _load_completion_length_scheduler(self, resume_from_checkpoint) -> None:
+        """Loads the `completion_length_scheduler`"""
+        self.completion_length_scheduler.load_state_dict(
+            torch.load(os.path.join(resume_from_checkpoint, COMPLETION_LENGTH_SCHEDULER_NAME), weights_only=True)
+        )
+        self._set_max_completion_length()
+
+    # ================== USE completion_length_scheduler ================== #
+    def _set_max_completion_length(self):
+        """Sync completion length, ensuring that new generations abide by
+        the `current_completion_length`'s value"""
+        value = self.current_completion_length.value
+
+        self.max_completion_length = value
+        if not self.use_vllm:
+            self.generation_config.update(max_new_tokens=value)
+
+    # This method overrides `GRPOTrainer._generate` to support dynamic completion length
+    # Maintenance note: This method is a copy-paste of the original `GRPOTrainer._generate`
+    # with only a single line modification.
+    def _generate(self, prompts: list[str], images: Optional[list]):
+        device = self.accelerator.device
+        mode = "train" if self.model.training else "eval"
+
+        self._set_max_completion_length()  # <--- HERE is the modification
+        prompt_ids, completion_ids, logprobs, forward_kwargs = self._generate_single_turn(prompts, images)
+
+        # Get completion length per sequence, used for logging
+        prompt_lengths = torch.tensor([len(ids) for ids in prompt_ids], device=device)
+        completion_lengths = torch.tensor([len(ids) for ids in completion_ids], device=device)
+        agg_prompt_lengths = self.accelerator.gather(prompt_lengths)
+        agg_completion_lengths = self.accelerator.gather(completion_lengths)
+        total_prompt_tokens = agg_prompt_lengths.sum()
+        total_completion_tokens = agg_completion_lengths.sum()  # = num_items_in_batch, required for the DAPO loss
+
+        # Log the metrics
+        if mode == "train":
+            self.state.num_input_tokens_seen += (total_prompt_tokens + total_completion_tokens).item()
+        self._metrics[mode]["num_tokens"] = [self.state.num_input_tokens_seen]
+
+        # Log completion lengths, mean, min, max
+        self._metrics[mode]["completions/mean_length"].append(agg_completion_lengths.float().mean().item())
+        self._metrics[mode]["completions/min_length"].append(agg_completion_lengths.float().min().item())
+        self._metrics[mode]["completions/max_length"].append(agg_completion_lengths.float().max().item())
+
+        # Identify sequences that terminated with EOS and log their lengths
+        eos_and_pad = [self.eos_token_id, self.pad_token_id]
+        is_truncated = torch.tensor([ids[-1] not in eos_and_pad for ids in completion_ids], device=device)
+        agg_is_truncated = self.accelerator.gather(is_truncated)
+        self._metrics[mode]["completions/clipped_ratio"].append(agg_is_truncated.float().mean().item())
+        term_completion_lengths = agg_completion_lengths[~agg_is_truncated]
+        if len(term_completion_lengths) == 0:  # edge case where no terminated sequences are found
+            term_completion_lengths = torch.zeros(1, device=device)
+        self._metrics[mode]["completions/mean_terminated_length"].append(term_completion_lengths.float().mean().item())
+        self._metrics[mode]["completions/min_terminated_length"].append(term_completion_lengths.float().min().item())
+        self._metrics[mode]["completions/max_terminated_length"].append(term_completion_lengths.float().max().item())
+
+        return prompt_ids, completion_ids, total_completion_tokens, logprobs, forward_kwargs
+
+    # ================== Dynamic DataLoader ================== #
     # This method overrides `GRPOTrainer.get_train_dataloader` to support dynamic completion length
     # Maintenance note: This method is a copy-paste of the original `GRPOTrainer.get_train_dataloader`
     # with only one modification.
@@ -175,7 +381,7 @@ class CONSEPTTrainer(GRPOTrainer):
 
         # vvvvvv Here is the change
         data_collator = PromptSolutionCollator(
-            data_collator, self.processing_class, self.completion_length, self.prompt_length_remove_threshold
+            data_collator, self.processing_class, self.current_completion_length, self.prompt_length_remove_threshold
         )
         # ^^^^^^
 
@@ -205,7 +411,7 @@ class CONSEPTTrainer(GRPOTrainer):
 
         def valid_item_fn(item: str) -> bool:
             tokens = self.processing_class.encode(item)
-            return len(tokens) - self.completion_length.value <= self.prompt_length_remove_threshold
+            return len(tokens) - self.current_completion_length.value <= self.prompt_length_remove_threshold
 
         return DynamicRepeatSampler(
             data_source=dataset,
@@ -217,13 +423,7 @@ class CONSEPTTrainer(GRPOTrainer):
             seed=self.args.seed,
         )
 
-    def _update_max_completion_length(self, value: int):
-        # Change completion length, ensuring that new samples & generations abide by this new value
-        self.completion_length.value = value
-        self.max_completion_length = value
-        if not self.use_vllm:
-            self.generation_config.update(max_new_tokens=value)
-
+    # ================== Custom Logging ================== #
     def _generate_and_score_completions(
         self, inputs: list[dict[str, Union[torch.Tensor, Any]]]
     ) -> dict[str, Union[torch.Tensor, Any]]:
@@ -285,5 +485,3 @@ class CONSEPTTrainer(GRPOTrainer):
                 if self.wandb_log_unique_prompts:
                     df = df.drop_duplicates(subset=["prompt"])
                 wandb.log({"completions": wandb.Table(dataframe=df)})
-
-    # TODO: Add a way to dynamically change the completion length & save it
