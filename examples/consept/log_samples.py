@@ -45,28 +45,27 @@ def print_prompt_completion_solutions_sample(
         step (`int`):
             Current training step number, used in the output title.
         eos_token (`int`):
-            The tokenizer's end-of-sentence token, as to not print empty samples
+            The tokenizer's end-of-sentence token, as to not print truncated/ empty samples
         num_samples (`int`, *optional*):
             Number of random samples to display. If `None` (default), all items will be displayed.
 
     Example:
     ```python
-    >>> from trl.trainer.utils import print_prompt_completions_sample
-
     >>> prompts = ["The sky is", "The sun is"]
-    >>> completions = [" blue.", " in the sky."]
+    >>> completions = [" falling.", " in the sky."]
+    >>> solutions = [" blue.", " red."]
     >>> rewards = {"Correctness": [0.123, 0.456], "Format": [0.789, 0.101]}
     >>> advantages = [0.987, 0.654]
-    >>> print_prompt_completions_sample(prompts, completions, rewards, advantages, 42)
-    ╭──────────────────────────── Step 42 ─────────────────────────────╮
-    │ ┏━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┓ │
-    │ ┃ Prompt     ┃ Completion   ┃ Correctness ┃ Format ┃ Advantage ┃ │
-    │ ┡━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━┩ │
-    │ │ The sky is │  blue.       │        0.12 │   0.79 │      0.99 │ │
-    │ ├────────────┼──────────────┼─────────────┼────────┼───────────┤ │
-    │ │ The sun is │  in the sky. │        0.46 │   0.10 │      0.65 │ │
-    │ └────────────┴──────────────┴─────────────┴────────┴───────────┘ │
-    ╰──────────────────────────────────────────────────────────────────╯
+    >>> print_prompt_completion_solutions_sample(prompts, completions, solutions, rewards, advantages)
+    ╭────────────────────────────────── Step 42 ───────────────────────────────────╮
+    │ ┏━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┓ │
+    │ ┃ Prompt     ┃ Completion   ┃ Solution  ┃ Correctness ┃ Format ┃ Advantage ┃ │
+    │ ┡━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━┩ │
+    │ │ The sky is │  falling.    │  blue.    │        0.12 │   0.79 │      0.99 │ │
+    │ ├────────────┼──────────────┼───────────┼─────────────┼────────┼───────────┤ │
+    │ │ The sun is │  in the sky. │  red.     │        0.46 │   0.10 │      0.65 │ │
+    │ └────────────┴──────────────┴───────────┴─────────────┴────────┴───────────┘ │
+    ╰──────────────────────────────────────────────────────────────────────────────╯
     ```
     """
     if not is_rich_available():
@@ -92,7 +91,7 @@ def print_prompt_completion_solutions_sample(
         return
 
     # Add columns
-    table.add_column("Prompt", style="bright_yellow")
+    table.add_column("Prompt", style="bright_red")
     table.add_column("Completion", style="bright_green")
     table.add_column("Solution", style="bright_cyan")
     for reward_name in rewards.keys():
@@ -130,21 +129,26 @@ def print_prompt_completion_solutions_sample(
 
     # Subsample data if num_samples is specified
     if num_samples is not None:
-        indices = random.sample(range(len(prompts)), num_samples)
+        indices = sorted(random.sample(range(len(prompts)), num_samples))
         prompts = [prompts[i] for i in indices]
         completions = [completions[i] for i in indices]
         solutions = [solutions[i] for i in indices]
         rewards = {key: [val[i] for i in indices] for key, val in rewards.items()}
         advantages = [advantages[i] for i in indices]
 
+    def truncate_prompt(entry: str, max_length: int) -> str:
+        if len(entry) > max_length + 14:  # 14 is the length of the truncated indicator text
+            return "|TRUNCATED|..." + entry[-max_length:]
+        return entry
+
     for i in range(len(prompts)):
         reward_values = [f"{rewards[key][i]:.2f}" for key in rewards.keys()]  # 2 decimals
         table.add_row(
-            format_entry(prompts[i]),
+            format_entry(truncate_prompt(prompts[i], max_length=min(len(completions[i]), len(solutions[i])))),
             format_entry(completions[i]),
             format_entry(solutions[i]),
             *reward_values,
-            f"{advantages[i]:.2f}",
+            f"{advantages[i]:.2f}",  # 2 decimals
         )
         table.add_section()  # Adds a separator between rows
 

@@ -248,6 +248,7 @@ class CONSEPTTrainer(GRPOTrainer):
         if completion_length_scheduler_cls is None:
             # if no scheduler class is specified, the completion length will never change
             completion_length_scheduler_cls = ConstantCompletionLengthScheduler
+
         if completion_length_scheduler_kwargs is None:
             completion_length_scheduler_kwargs = {}
 
@@ -436,7 +437,7 @@ class CONSEPTTrainer(GRPOTrainer):
 
     # This method overrides `GRPOTrainer.log` to support our logging (as we do not use chat template)
     # Maintenance note: This method is a copy-paste of the original `GRPOTrainer.log`
-    # with only one modification (changing the terminal/ console logging function).
+    # with only 2 modifications (changing the terminal/ console logging function).
     def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
         mode = "train" if self.model.training else "eval"
         metrics = {key: sum(val) / len(val) for key, val in self._metrics[mode].items()}  # average the metrics
@@ -447,12 +448,14 @@ class CONSEPTTrainer(GRPOTrainer):
             metrics = {f"eval_{key}": val for key, val in metrics.items()}
 
         logs = {**logs, **metrics}
-        super().log(logs, start_time)
+        super(GRPOTrainer, self).log(
+            logs, start_time
+        )  # <--- Here is a change. Though it IS similar in function to GRPOTrainer, calling BaseTrainer.log()
         self._metrics[mode].clear()
 
         if self.accelerator.is_main_process and self.log_completions:
             if is_rich_available():
-                # vvvvvv Here is the change
+                # vvvvvv Here is another change
                 print_prompt_completion_solutions_sample(
                     self._logs["prompt"],
                     self._logs["completion"],
