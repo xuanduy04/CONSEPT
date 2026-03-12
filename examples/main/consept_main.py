@@ -37,7 +37,7 @@ if __name__ == "__main__":
         dtype=dtype,
     )
 
-    ################\
+    ################
     # Dataset
     ################
     if not script_args.dataset_streaming:

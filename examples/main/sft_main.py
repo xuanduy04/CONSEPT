@@ -7,7 +7,7 @@ from trl import ModelConfig, ScriptArguments, SFTConfig, SFTTrainer, TrlParser
 def set_gradient_accumulation_steps(args, effective_batch_size: int = 1024):
     assert torch.cuda.device_count() > 0, "No CUDA devices visible"
     number_of_devices = torch.cuda.device_count()
-    assert 1024 % (args.per_device_train_batch_size * number_of_devices) == 0, (
+    assert effective_batch_size % (args.per_device_train_batch_size * number_of_devices) == 0, (
         f"Cannot evenly divide {effective_batch_size} by {args.per_device_train_batch_size=} and {number_of_devices=}"
     )
     args.gradient_accumulation_steps = effective_batch_size // (args.per_device_train_batch_size * number_of_devices)
