@@ -6,11 +6,7 @@ from consept.semantic_reward import get_semantic_reward
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
-from trl import (
-    ModelConfig,
-    ScriptArguments,
-    TrlParser,
-)
+from trl import ModelConfig, ScriptArguments, TrlParser
 
 
 class _RightPaddingLogFilter(logging.Filter):
@@ -26,7 +22,7 @@ logging.getLogger("transformers.generation.utils").addFilter(_RightPaddingLogFil
 
 if __name__ == "__main__":
     parser = TrlParser((ScriptArguments, CONSEPTConfig, ModelConfig))
-    script_args, training_args, model_args, dataset_args = parser.parse_args_and_config()
+    script_args, training_args, model_args = parser.parse_args_and_config()
     ################
     # Model & Processor
     ################
@@ -41,7 +37,7 @@ if __name__ == "__main__":
     # Dataset
     ################
     if not script_args.dataset_streaming:
-        print("dataset_streaming is False, loading dataset will take a while...")
+        print("`dataset_streaming` is False, loading dataset will take a while...")
     train_dataset = load_dataset(
         "json", data_files=script_args.dataset_name, split="train", streaming=script_args.dataset_streaming
     )

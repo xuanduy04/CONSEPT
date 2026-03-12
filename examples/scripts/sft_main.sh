@@ -35,9 +35,8 @@ OUTPUT_DIR="$(dirname "$SCRIPT_DIR")/sft-$RUN_NAME"
         --save_strategy steps \
         --save_steps 500 \
         --dtype bfloat16 \
-        --streaming true \
         --packing true \
-        --attn_implementation 'flash_attention_2' \
+        --attn_implementation "flash_attention_2" \
         --report_to tensorboard \
         --seed 2212
 )

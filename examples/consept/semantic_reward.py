@@ -36,7 +36,7 @@ def tfidf_cosine_similarity(s1: str, s2: str) -> float:
     return F.cosine_similarity(v1, v2).item()
 
 
-PRUNED_PROMPT_KEY = "[PRUNED]"
+PRUNED_PROMPT_KEY = "<|PRUNED_PROMPT|>"
 def get_semantic_reward(eos_token: str) -> callable:
     def semantic_reward(prompts: list[str], completions: list[str], solution: list[str], **kwargs) -> list[float]:
         r"""

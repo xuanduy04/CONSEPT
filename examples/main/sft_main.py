@@ -4,7 +4,7 @@ from datasets import load_dataset
 from trl import ModelConfig, ScriptArguments, SFTConfig, SFTTrainer, TrlParser
 
 
-def set_gradient_accumulation_steps(args, effective_batch_size: int = 1024):
+def set_gradient_accumulation_steps(args, effective_batch_size: int = 256):
     assert torch.cuda.device_count() > 0, "No CUDA devices visible"
     number_of_devices = torch.cuda.device_count()
     assert effective_batch_size % (args.per_device_train_batch_size * number_of_devices) == 0, (
@@ -21,7 +21,7 @@ def set_gradient_accumulation_steps(args, effective_batch_size: int = 1024):
 
 if __name__ == "__main__":
     parser = TrlParser((ScriptArguments, SFTConfig, ModelConfig))
-    script_args, training_args, model_args, dataset_args = parser.parse_args_and_config()
+    script_args, training_args, model_args = parser.parse_args_and_config()
     ################
     # Model & Processor
     ################
@@ -40,7 +40,7 @@ if __name__ == "__main__":
     # Dataset
     ################
     if not script_args.dataset_streaming:
-        print("dataset_streaming is False, loading dataset will take a while...")
+        print("`dataset_streaming` is False, loading dataset will take a while...")
     train_dataset = load_dataset(
         "json", data_files=script_args.dataset_name, split="train", streaming=script_args.dataset_streaming
     )
