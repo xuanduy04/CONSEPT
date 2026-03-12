@@ -6,7 +6,7 @@ PARENT_DIR="$(dirname "$SCRIPT_DIR")"
 (
     cd "$PARENT_DIR" || exit 1
     PYTHONPATH="$PARENT_DIR" accelerate launch \
-        --config_file accelerate_configs/single_gpu.yaml \
+        --config_file accelerate_configs/1gpu.yaml \
         main/consept_main.py \
         --model_name_or_path Qwen/Qwen3-0.6B-Base \
         --output_dir consept-Qwen3-0.6B-Base \

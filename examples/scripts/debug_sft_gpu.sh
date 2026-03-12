@@ -17,7 +17,7 @@ OUTPUT_DIR="$PARENT_DIR/sft-$RUN_NAME"
     # export HUGGINGFACE_HUB_CACHE=""
     cd "$PARENT_DIR" || exit 1
     PYTHONPATH="$PARENT_DIR" accelerate launch \
-        --config_file accelerate_configs/single_gpu.yaml \
+        --config_file accelerate_configs/1gpu.yaml \
         main/sft_main.py \
         --model_name_or_path "$MODEL_PATH" \
         --dataset_path "$DATA_PATH" \
