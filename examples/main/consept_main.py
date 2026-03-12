@@ -36,8 +36,6 @@ if __name__ == "__main__":
     ################
     # Dataset
     ################
-    if not script_args.dataset_streaming:
-        print("`dataset_streaming` is False, loading dataset will take a while...")
     train_dataset = load_dataset(
         "json", data_files=script_args.dataset_name, split="train", streaming=script_args.dataset_streaming
     )

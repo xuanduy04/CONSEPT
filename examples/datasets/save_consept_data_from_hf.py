@@ -33,7 +33,7 @@ class ScriptArguments:
     save_to_local: Optional[str] = field(
         default=None,
         metadata={
-            "help": "Local path to save the dataset as JSONL. If not provided, the dataset will be pushed to the Hub."
+            "help": "Local folder to save the dataset as JSONL. The dataset will be saved as '`save_to_local`/training.jsonl'"
         },
     )
     num_samples: Optional[int] = field(
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         num_proc=script_args.dataset_num_proc if not script_args.streaming else None,
     )
 
-    # Shuffle and/or select a fixed number of samples if requested
+    # Select a fixed number of samples if requested
     if script_args.num_samples is not None:
         if script_args.streaming:
             dataset = dataset.take(script_args.num_samples)
@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     if script_args.save_to_local:
         # Save the dataset locally as JSONL
-        dataset.to_json(script_args.save_to_local, lines=True)
-        print(f"Dataset saved locally to: '{script_args.save_to_local}'")
+        dataset.to_json(f"{script_args.save_to_local}/training.jsonl", lines=True)
+        print(f"Dataset saved locally to: '{script_args.save_to_local}/training.jsonl'")
     else:
         print("Dataset loaded successfully (though not saved anywhere as `save_to_local` is `False`).")
