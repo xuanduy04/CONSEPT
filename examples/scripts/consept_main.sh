@@ -1,15 +1,25 @@
 #!/bin/bash
 
+MODEL_PATH="Qwen/Qwen3-0.6B-Base"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PARENT_DIR="$(dirname "$SCRIPT_DIR")"
+DATA_PATH="$PARENT_DIR/data_ready2train/*.jsonl"  # <--- DATA_PATH HERE
+
+
+MODEL_NAME="$(basename "$MODEL_PATH")"
+RUN_NAME="${MODEL_NAME}-$(date +%Y%m%d-%H%M%S)"
+OUTPUT_DIR="$PARENT_DIR/sft-$RUN_NAME"
 
 (
     cd "$PARENT_DIR" || exit 1
     PYTHONPATH="$PARENT_DIR" accelerate launch \
         --config_file accelerate_configs/1gpu.yaml \
         main/consept_main.py \
-        --model_name_or_path Qwen/Qwen3-0.6B-Base \
-        --output_dir consept-Qwen3-0.6B-Base \
+        --model_name_or_path "$MODEL_PATH" \
+        --output_dir "$OUTPUT_DIR" \
+        --dataset_name "$DATA_PATH" \
+        --dataset_streaming true \
         --dtype bfloat16 \
         --max_completion_length 1024 \
         --per_device_train_batch_size 1 \

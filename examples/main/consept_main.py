@@ -1,13 +1,7 @@
 import logging
-from dataclasses import dataclass
 
 import torch
 from consept import CONSEPTConfig, CONSEPTTrainer
-from consept.completion_length_scheduler import (
-    ConstantCompletionLengthScheduler,
-    IncreaseCompletionLengthOnVictory,
-    StepCompletionLengthScheduler,
-)
 from consept.semantic_reward import get_semantic_reward
 from datasets import load_dataset
 from transformers import AutoTokenizer
@@ -30,14 +24,8 @@ class _RightPaddingLogFilter(logging.Filter):
 logging.getLogger("transformers.generation.utils").addFilter(_RightPaddingLogFilter())
 
 
-@dataclass
-class DatasetConfig:
-    dataset_path: str
-    streaming: bool = True
-
-
 if __name__ == "__main__":
-    parser = TrlParser((ScriptArguments, CONSEPTConfig, ModelConfig, DatasetConfig))
+    parser = TrlParser((ScriptArguments, CONSEPTConfig, ModelConfig))
     script_args, training_args, model_args, dataset_args = parser.parse_args_and_config()
     ################
     # Model & Processor
@@ -49,11 +37,13 @@ if __name__ == "__main__":
         dtype=dtype,
     )
 
-    ################
+    ################\
     # Dataset
     ################
+    if not script_args.dataset_streaming:
+        print("dataset_streaming is False, loading dataset will take a while...")
     train_dataset = load_dataset(
-        "json", data_files=dataset_args.dataset_path, split="train", streaming=dataset_args.streaming
+        "json", data_files=script_args.dataset_name, split="train", streaming=script_args.dataset_streaming
     )
 
     train_dataset = train_dataset.select_columns(["text"])
