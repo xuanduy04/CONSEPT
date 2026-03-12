@@ -16,16 +16,16 @@ class IncreaseCompletionLengthOnVictory(CompletionLengthScheduler):
     """Increase completion length when a metric has "consistently surpassed" a threshold (i.e. victorious).
 
     This scheduler reads a metric's quantity and if it has continuously stayed higher/lower
-    than a `threshold` for a `patience` number of steps, the completion length is increased.
+    than a `victory_threshold` for a `patience` number of steps, the completion length is increased.
 
     Args:
         completion_length (multiprocessing.sharedctypes.Synchronized): The completion length
             this scheduler will adjust the values of.
         max_completion_length (int): The `completion_length`'s upper bound.
-        threshold (float):
-            The metric needs to be "better" than threshold to be considered a victory.
-        mode (str, One of [`min`, `max`]): In `min` mode, victory is achieved when metric is **less** than `threshold`;
-        in `max` mode , it is achieved when metric is **more** than `threshold`. Default: 'max'.
+        victory_threshold (float):
+            The metric needs to be "better" than victory_threshold to be considered a victory.
+        mode (str, One of [`min`, `max`]): In `min` mode, victory is achieved when metric is **less** than `victory_threshold`;
+        in `max` mode , it is achieved when metric is **more** than `victory_threshold`. Default: 'max'.
         factor (float): Factor by which the `completion length` will be increased,
             rounded down after every multiplication. `new_completion_length = new_completion_length * factor`.
             Default: 2.0.
@@ -33,7 +33,7 @@ class IncreaseCompletionLengthOnVictory(CompletionLengthScheduler):
             which the completion length will be increased.
             Default: 10.
         eps (float):
-            When the difference between current `metric` and `threshold` is less than this value,
+            When the difference between current `metric` and `victory_threshold` is less than this value,
             they are considered equal (and thus counted as a victory). Default: 1e-8
         cooldown (int): Number of steps to wait before resuming
             normal operation after `completion_length` has been increased. Default: 0.
@@ -43,7 +43,7 @@ class IncreaseCompletionLengthOnVictory(CompletionLengthScheduler):
         self,
         completion_length: "Synchronized",
         max_completion_length: int,
-        threshold: float,
+        victory_threshold: float,
         mode: Literal["min", "max"] = "max",
         factor: float = 2.0,
         patience: int = 10,
@@ -55,7 +55,7 @@ class IncreaseCompletionLengthOnVictory(CompletionLengthScheduler):
         if factor <= 1.0:
             raise ValueError("Scheduler's `factor` should be > 1.0.")
         super().__init__(completion_length=completion_length, max_completion_length=max_completion_length)
-        self.threshold = threshold
+        self.victory_threshold = victory_threshold
         self.mode = mode
         self.factor = factor
         self.patience = patience
@@ -98,8 +98,8 @@ class IncreaseCompletionLengthOnVictory(CompletionLengthScheduler):
         return self.cooldown_counter > 0
 
     def _is_victory(self, metric):
-        # Verify the math via making the equation: 0 < metric - self.threshold < self.eps
+        # Verify the math via making the equation: 0 < metric - self.victory_threshold < self.eps
         if self.mode == "min":
-            return metric < self.threshold + self.eps
+            return metric < self.victory_threshold + self.eps
         else:  # mode == 'max':
-            return metric + self.eps > self.threshold
+            return metric + self.eps > self.victory_threshold

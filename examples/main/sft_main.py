@@ -50,6 +50,7 @@ if __name__ == "__main__":
     ################
     # Training
     ################
+    print(f"Begin training SFT for model {model_args.model_name_or_path}")
     training_args.accelerator_config.dispatch_batches = False
     trainer = SFTTrainer(model=model_args.model_name_or_path, args=training_args, train_dataset=train_dataset)
     trainer.train(

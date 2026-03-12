@@ -45,6 +45,7 @@ if __name__ == "__main__":
     ################
     # Training
     ################
+    print(f"Begin training CONSEPT for model {model_args.model_name_or_path}")
     trainer = CONSEPTTrainer(
         model=model_args.model_name_or_path,
         args=training_args,
