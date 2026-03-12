@@ -9,7 +9,7 @@ DATA_PATH="$PARENT_DIR/data_ready2train/*.jsonl"  # <--- DATA_PATH HERE
 
 MODEL_NAME="$(basename "$MODEL_PATH")"
 RUN_NAME="${MODEL_NAME}-$(date +%Y%m%d-%H%M%S)"
-OUTPUT_DIR="$PARENT_DIR/sft-$RUN_NAME"
+OUTPUT_DIR="$PARENT_DIR/outputs/sft-$RUN_NAME"
 
 (
     cd "$PARENT_DIR" || exit 1
@@ -19,7 +19,7 @@ OUTPUT_DIR="$PARENT_DIR/sft-$RUN_NAME"
         --model_name_or_path "$MODEL_PATH" \
         --output_dir "$OUTPUT_DIR" \
         --dataset_name "$DATA_PATH" \
-        --dataset_streaming true \
+        --dataset_streaming false \
         --dtype bfloat16 \
         --max_completion_length 1024 \
         --per_device_train_batch_size 1 \

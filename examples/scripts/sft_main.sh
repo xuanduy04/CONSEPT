@@ -9,7 +9,7 @@ DATA_PATH="$PARENT_DIR/data_ready2train/*.jsonl"  # <--- DATA_PATH HERE
 
 MODEL_NAME="$(basename "$MODEL_PATH")"
 RUN_NAME="${MODEL_NAME}-$(date +%Y%m%d-%H%M%S)"
-OUTPUT_DIR="$(dirname "$SCRIPT_DIR")/sft-$RUN_NAME"
+OUTPUT_DIR="$PARENT_DIR/outputs/sft-$RUN_NAME"
 
 (
     # export HF_HOME=""
