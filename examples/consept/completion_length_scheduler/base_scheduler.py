@@ -1,8 +1,5 @@
-from typing import TYPE_CHECKING, Any
-
-
-if TYPE_CHECKING:
-    from multiprocessing.sharedctypes import Synchronized
+from multiprocessing.sharedctypes import Synchronized
+from typing import Any
 
 
 class CompletionLengthScheduler:
@@ -19,7 +16,7 @@ class CompletionLengthScheduler:
 
     def __init__(
         self,
-        completion_length: "Synchronized",
+        completion_length: Synchronized,
         max_completion_length: int,
     ) -> None:
         # Attach completion_length

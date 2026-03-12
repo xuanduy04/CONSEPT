@@ -236,12 +236,11 @@ class CONSEPTTrainer(GRPOTrainer):
         self._logs["solution"] = deque(maxlen=args.generation_batch_size)
 
         # Dynamically changing the completion length during training
+        self.initial_completion_length = self.args.initial_completion_length
         self._max_completion_length = self.max_completion_length
         self.prompt_length_remove_threshold = self.args.prompt_length_remove_threshold
         # vvvvvv This value is synced across workers to ensure the DataLoader only returns samples that satisfies our dynamically changing constraint.
-        self.current_completion_length: "Synchronized" = multiprocessing.Value(
-            "i", self.args.initial_completion_length
-        )
+        self.current_completion_length: "Synchronized" = multiprocessing.Value("i", self.initial_completion_length)
         # ^^^^^^
         self._set_max_completion_length()
         # NOTE! Because of backwards compatibility, please never use the variable `max_completion_length` directly
@@ -249,11 +248,11 @@ class CONSEPTTrainer(GRPOTrainer):
         if completion_length_scheduler_cls is None:
             # if no scheduler class is specified, the completion length will never change
             completion_length_scheduler_cls = ConstantCompletionLengthScheduler
-        elif completion_length_scheduler_kwargs is None:
+        if completion_length_scheduler_kwargs is None:
             completion_length_scheduler_kwargs = {}
 
-        self.completion_length_scheduler: "CompletionLengthScheduler" = self.completion_length_scheduler_cls(
-            completion_length=self.completion_length,
+        self.completion_length_scheduler: "CompletionLengthScheduler" = completion_length_scheduler_cls(
+            completion_length=self.current_completion_length,
             max_completion_length=self._max_completion_length,
             **completion_length_scheduler_kwargs,
         )
@@ -410,8 +409,10 @@ class CONSEPTTrainer(GRPOTrainer):
             dataset = self.train_dataset
 
         def valid_item_fn(item: str) -> bool:
-            tokens = self.processing_class.encode(item)
-            return len(tokens) - self.current_completion_length.value <= self.prompt_length_remove_threshold
+            return (
+                len(self.processing_class.encode(item)) - self.current_completion_length.value
+                >= self.prompt_length_remove_threshold
+            )
 
         return DynamicRepeatSampler(
             data_source=dataset,
