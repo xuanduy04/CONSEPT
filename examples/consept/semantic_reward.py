@@ -11,32 +11,40 @@ def map_to_range(x, low, high):
 
 
 _TOKEN_RE = re.compile(r"\b\w+\b")
+
+
 def tokenize(text: str) -> list[str]:
     return _TOKEN_RE.findall(text.lower())
 
 
+def compute_tf(doc_tokens):
+    counts = Counter(doc_tokens)
+    total = len(doc_tokens)
+    return {word: count / total for word, count in counts.items()}
+
+
+def compute_idf(docs_tokens):
+    N = len(docs_tokens)
+    all_words = {word for doc in docs_tokens for word in doc}
+    return {word: math.log((N + 1) / (sum(1 for doc in docs_tokens if word in doc) + 1)) + 1 for word in all_words}
+
+
+def compute_tfidf_vector(tf, idf) -> "torch.Tensor":
+    return torch.tensor([tf.get(word, 0.0) * idf[word] for word in idf])
+
+
 def tfidf_cosine_similarity(s1: str, s2: str) -> float:
     docs = [tokenize(s1), tokenize(s2)]
-    vocab = sorted(set(docs[0]) | set(docs[1]))
-    N = len(docs)
-
-    # IDF: log(N / doc_freq) for each term
-    doc_freq = Counter(w for doc in docs for w in set(doc))
-    idf = torch.tensor([math.log(N / (doc_freq[w])) for w in vocab])
-
-    # TF: raw count / doc length
-    def tf_vec(tokens):
-        counts = Counter(tokens)
-        vec = torch.tensor([counts.get(w, 0) / len(tokens) for w in vocab])
-        return vec
-
-    v1 = (tf_vec(docs[0]) * idf).unsqueeze(0)
-    v2 = (tf_vec(docs[1]) * idf).unsqueeze(0)
+    idf = compute_idf(docs)
+    v1 = compute_tfidf_vector(compute_tf(docs[0]), idf).unsqueeze(0)
+    v2 = compute_tfidf_vector(compute_tf(docs[1]), idf).unsqueeze(0)
 
     return F.cosine_similarity(v1, v2).item()
 
 
 PRUNED_PROMPT_KEY = "<|PRUNED_PROMPT|>"
+
+
 def get_semantic_reward(eos_token: str) -> callable:
     def semantic_reward(prompts: list[str], completions: list[str], solution: list[str], **kwargs) -> list[float]:
         r"""
@@ -66,6 +74,7 @@ def get_semantic_reward(eos_token: str) -> callable:
                 reward = PRUNED_PROMPT_KEY
             rewards.append(reward)
 
-        avg_rewards = float(sum_valid_rewards / valid_prompts) if valid_prompts else 0.
+        avg_rewards = float(sum_valid_rewards / valid_prompts) if valid_prompts else 0.0
         return [reward if reward != PRUNED_PROMPT_KEY else avg_rewards for reward in rewards]
+
     return semantic_reward
