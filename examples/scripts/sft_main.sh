@@ -36,6 +36,7 @@ OUTPUT_DIR="$PARENT_DIR/outputs/sft-$RUN_NAME"
         --save_steps 500 \
         --dtype bfloat16 \
         --packing true \
+        --ddp_find_unused_parameters false \
         --attn_implementation "flash_attention_2" \
         --report_to tensorboard \
         --seed 2212

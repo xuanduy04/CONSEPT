@@ -138,13 +138,13 @@ def print_prompt_completion_solutions_sample(
 
     def truncate_prompt(entry: str, max_length: int) -> str:
         if len(entry) > max_length + 14:  # 14 is the length of the truncated indicator text
-            return "|TRUNCATED|..." + entry[-max_length:]
+            return "|TRUNCATED| ..." + entry[-max_length:]
         return entry
 
     for i in range(len(prompts)):
         reward_values = [f"{rewards[key][i]:.2f}" for key in rewards.keys()]  # 2 decimals
         table.add_row(
-            format_entry(truncate_prompt(prompts[i], max_length=min(len(completions[i]), len(solutions[i])))),
+            format_entry(truncate_prompt(prompts[i], max_length=max(len(completions[i]), len(solutions[i])))),
             format_entry(completions[i]),
             format_entry(solutions[i]),
             *reward_values,
