@@ -1,17 +1,3 @@
-# Copyright 2020-2025 The HuggingFace Team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import inspect
 import os
 import textwrap
@@ -255,6 +241,7 @@ class CONSEPTTrainer(GRPOTrainer):
         self.completion_length_scheduler: "CompletionLengthScheduler" = completion_length_scheduler_cls(
             completion_length=self.current_completion_length,
             max_completion_length=self._max_completion_length,
+            initial_completion_length=self.initial_completion_length,
             **completion_length_scheduler_kwargs,
         )
 
@@ -291,7 +278,8 @@ class CONSEPTTrainer(GRPOTrainer):
             start_time=start_time,
             learning_rate=learning_rate,
         )
-        # NOTE: We update the completion length here, as this is called after step end.
+        # NOTE: We update the completion length here,
+        #       as this function called after sync_step's end.
         # Treat it like an... evaluation, ya know?
         self.completion_length_scheduler.step()
 
@@ -437,7 +425,7 @@ class CONSEPTTrainer(GRPOTrainer):
 
     # This method overrides `GRPOTrainer.log` to support our logging (as we do not use chat template)
     # Maintenance note: This method is a copy-paste of the original `GRPOTrainer.log`
-    # with only 2 modifications (changing the terminal/ console logging function).
+    # with only 3 modifications (add completion length to logs & changing the terminal/ console logging function).
     def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
         mode = "train" if self.model.training else "eval"
         metrics = {key: sum(val) / len(val) for key, val in self._metrics[mode].items()}  # average the metrics
@@ -447,10 +435,16 @@ class CONSEPTTrainer(GRPOTrainer):
         if mode == "eval":
             metrics = {f"eval_{key}": val for key, val in metrics.items()}
 
+        # vvvvvv Here's a change
+        if mode == "train":
+            logs["training_completion_length"] = self.current_completion_length.value
+        # ^^^^^^
+
         logs = {**logs, **metrics}
-        super(GRPOTrainer, self).log(
-            logs, start_time
-        )  # <--- Here is a change. Though it IS similar in function to GRPOTrainer, calling BaseTrainer.log()
+        # vvvvvv Here is another change. Though this one IS similar in function to GRPOTrainer,
+        # calling BaseTrainer.log()
+        super(GRPOTrainer, self).log(logs, start_time)
+        # ^^^^^^
         self._metrics[mode].clear()
 
         if self.accelerator.is_main_process and self.log_completions:

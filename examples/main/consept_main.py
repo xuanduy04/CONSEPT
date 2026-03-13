@@ -49,7 +49,10 @@ if __name__ == "__main__":
     # Completion length scheduler
     ################
     completion_length_scheduler_cls = LinearCompletionLengthScheduler
-    completion_length_scheduler_kwargs = {"warmup_steps": 100}
+    completion_length_scheduler_kwargs = {
+        # currently setting this value for debugging purposes
+        "warmup_steps": training_args.max_completion_length - training_args.initial_completion_length
+    }
 
     ################
     # Training

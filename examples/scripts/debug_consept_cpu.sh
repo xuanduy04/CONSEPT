@@ -21,6 +21,7 @@ OUTPUT_DIR="$PARENT_DIR/outputs/sft-$RUN_NAME"
         --dataset_name "$DATA_PATH" \
         --dataset_streaming false \
         --dtype bfloat16 \
+        --initial_completion_length 8 \
         --max_completion_length 1024 \
         --per_device_train_batch_size 1 \
         --gradient_accumulation_steps 4 \

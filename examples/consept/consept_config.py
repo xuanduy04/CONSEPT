@@ -27,7 +27,7 @@ class CONSEPTConfig(GRPOConfig):
 
     prompt_length_remove_threshold: Optional[int] = field(
         default=100,
-        metadata={"help": "If the prompt is less than this number, we remove the sample instead."},
+        metadata={"help": "If the prompt length (in tokens) is less than this number, we remove the sample instead."},
     )
 
     # default for template
