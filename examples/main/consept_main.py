@@ -2,6 +2,7 @@ import logging
 
 import torch
 from consept import CONSEPTConfig, CONSEPTTrainer
+from consept.completion_length_scheduler import LinearCompletionLengthScheduler
 from consept.semantic_reward import get_semantic_reward
 from datasets import load_dataset
 from transformers import AutoTokenizer
@@ -45,11 +46,19 @@ if __name__ == "__main__":
     train_dataset = train_dataset.select_columns(["text"])
 
     ################
+    # Completion length scheduler
+    ################
+    completion_length_scheduler_cls = LinearCompletionLengthScheduler
+    completion_length_scheduler_kwargs = {"warmup_steps": 100}
+
+    ################
     # Training
     ################
     trainer = CONSEPTTrainer(
         model=model_args.model_name_or_path,
         processing_class=processor,
+        completion_length_scheduler_cls=completion_length_scheduler_cls,
+        completion_length_scheduler_kwargs=completion_length_scheduler_kwargs,
         args=training_args,
         reward_funcs=get_semantic_reward(processor.eos_token),
         train_dataset=train_dataset,

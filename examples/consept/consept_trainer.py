@@ -291,9 +291,9 @@ class CONSEPTTrainer(GRPOTrainer):
             start_time=start_time,
             learning_rate=learning_rate,
         )
-        # NOTE: IDEA! maybe we update the completion length HERE!!!
-        # Treat it as an... evaluation, ya know?
-        self.completion_length_scheduler.step(metrics=self._logs["rewards"])
+        # NOTE: We update the completion length here, as this is called after step end.
+        # Treat it like an... evaluation, ya know?
+        self.completion_length_scheduler.step()
 
     # ================== LOAD completion_length_scheduler ================== #
     # These next 2 functions loads the completion_length_scheduler

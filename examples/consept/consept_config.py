@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Literal, Optional
+from typing import Optional
 
 from trl import GRPOConfig
 
@@ -21,7 +21,7 @@ class CONSEPTConfig(GRPOConfig):
 
     # Parameters that control the dynamic completion length
     initial_completion_length: Optional[int] = field(
-        default=64,
+        default=1,
         metadata={"help": "At first, what is the number of tokens that the model will try to generate."},
     )
 
@@ -30,16 +30,19 @@ class CONSEPTConfig(GRPOConfig):
         metadata={"help": "If the prompt is less than this number, we remove the sample instead."},
     )
 
-    # completion_length_scheduler: Literal["constant", "increase_on_victory", "linear", "step"] = field(
-    #     default="constant",
-    #     metadata={
-    #         "help": "The completion length scheduler to use. Defaults to 'constant', "
-    #         "i.e. no change in completion length throughout training."
-    #     },
-    # )
-
     # default for template
     # _name_: Optional[str] = field(
     #     default=False,
     #     metadata={"help": ""},
     # )
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        if self.initial_completion_length <= 0:
+            raise ValueError("'initial_completion_length' must be a non-negative integer.")
+        if self.max_completion_length < self.initial_completion_length:
+            raise ValueError("'max_completion_length' must be at least 'initial_completion_length'.")
+
+        if self.prompt_length_remove_threshold <= 0:
+            raise ValueError("'prompt_length_remove_threshold' must be a non-negative integer.")
