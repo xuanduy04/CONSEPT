@@ -39,8 +39,6 @@ OUTPUT_DIR="$PARENT_DIR/outputs/sft-$RUN_NAME"
         --logging_steps 10 \
         --save_strategy steps \
         --save_steps 100 \
-        --save_total_limit 100 \
-        --num_train_epochs 1 \
         --report_to none \
         --seed 2212
 )

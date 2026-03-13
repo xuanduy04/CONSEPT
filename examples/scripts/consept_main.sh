@@ -23,6 +23,7 @@ OUTPUT_DIR="$PARENT_DIR/outputs/sft-$RUN_NAME"
         --dtype bfloat16 \
         --initial_completion_length 8 \
         --max_completion_length 1024 \
+        --max_length 4096 \
         --per_device_train_batch_size 1 \
         --gradient_accumulation_steps 4 \
         --generation_batch_size 16 \
@@ -36,11 +37,9 @@ OUTPUT_DIR="$PARENT_DIR/outputs/sft-$RUN_NAME"
         --max_grad_norm 1.0 \
         --log_completions true \
         --num_completions_to_print 1 \
-        --logging_steps 10 \
+        --logging_steps 100 \
         --save_strategy steps \
         --save_steps 100 \
-        --save_total_limit 100 \
-        --num_train_epochs 1 \
-        --report_to none \
+        --report_to tensorboard \
         --seed 2212
 )

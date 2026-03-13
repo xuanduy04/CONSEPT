@@ -1,5 +1,3 @@
-import logging
-
 import torch
 from consept import CONSEPTConfig, CONSEPTTrainer
 from consept.completion_length_scheduler import LinearCompletionLengthScheduler
@@ -9,17 +7,6 @@ from transformers import AutoTokenizer
 from utils import validate_accelerator_config
 
 from trl import ModelConfig, ScriptArguments, TrlParser
-
-
-class _RightPaddingLogFilter(logging.Filter):
-    def filter(self, record):
-        return (
-            "decoder-only architecture is being used, but right-padding was detected"
-            not in record.getMessage().lower()
-        )
-
-
-logging.getLogger("transformers.generation.utils").addFilter(_RightPaddingLogFilter())
 
 
 if __name__ == "__main__":

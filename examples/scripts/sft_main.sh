@@ -15,10 +15,10 @@ OUTPUT_DIR="$PARENT_DIR/outputs/sft-$RUN_NAME"
     # export HF_HOME=""
     # export HF_DATASETS_CACHE=""
     # export HUGGINGFACE_HUB_CACHE=""
-    export CUDA_VISIBLE_DEVICES="0"
+    export CUDA_VISIBLE_DEVICES="0,1,2,3"
     cd "$PARENT_DIR" || exit 1
     PYTHONPATH="$PARENT_DIR" accelerate launch \
-        --config_file accelerate_configs/4gpus.yaml \
+        --config_file accelerate_configs/4gpus_fsdp2.yaml \
         main/sft_main.py \
         --model_name_or_path "$MODEL_PATH" \
         --output_dir "$OUTPUT_DIR" \
@@ -36,7 +36,6 @@ OUTPUT_DIR="$PARENT_DIR/outputs/sft-$RUN_NAME"
         --save_steps 500 \
         --dtype bfloat16 \
         --packing true \
-        --ddp_find_unused_parameters false \
         --attn_implementation "flash_attention_2" \
         --report_to tensorboard \
         --seed 2212

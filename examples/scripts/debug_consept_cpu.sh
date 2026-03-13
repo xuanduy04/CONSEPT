@@ -24,8 +24,6 @@ OUTPUT_DIR="$PARENT_DIR/outputs/sft-$RUN_NAME"
         --initial_completion_length 8 \
         --max_completion_length 1024 \
         --per_device_train_batch_size 1 \
-        --gradient_accumulation_steps 4 \
-        --generation_batch_size 16 \
         --num_generations 4 \
         --gradient_checkpointing false \
         --loss_type dr_grpo \
@@ -39,8 +37,6 @@ OUTPUT_DIR="$PARENT_DIR/outputs/sft-$RUN_NAME"
         --logging_steps 10 \
         --save_strategy steps \
         --save_steps 100 \
-        --save_total_limit 100 \
-        --num_train_epochs 1 \
         --report_to none \
         --seed 2212 \
         --use_cpu

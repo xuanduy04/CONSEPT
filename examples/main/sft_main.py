@@ -33,7 +33,7 @@ if __name__ == "__main__":
         attn_implementation=model_args.attn_implementation,
         dtype=dtype,
     )
-    processor = AutoTokenizer.from_pretrained(model_args.model_name_or_path, model_max_len=training_args.max_len)
+    processor = AutoTokenizer.from_pretrained(model_args.model_name_or_path, model_max_len=training_args.max_length)
 
     # NOTE: This will hard-code effective batch size.
     training_args = set_gradient_accumulation_steps(training_args)
