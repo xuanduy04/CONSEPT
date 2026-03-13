@@ -5,6 +5,7 @@ from consept import CONSEPTConfig, CONSEPTTrainer
 from consept.semantic_reward import get_semantic_reward
 from datasets import load_dataset
 from transformers import AutoTokenizer
+from utils import validate_accelerator_config
 
 from trl import ModelConfig, ScriptArguments, TrlParser
 
@@ -32,6 +33,7 @@ if __name__ == "__main__":
         attn_implementation=model_args.attn_implementation,
         dtype=dtype,
     )
+    processor = AutoTokenizer.from_pretrained(model_args.model_name_or_path, padding_side="left")
 
     ################
     # Dataset
@@ -45,14 +47,15 @@ if __name__ == "__main__":
     ################
     # Training
     ################
-    print(f"Begin training CONSEPT for model {model_args.model_name_or_path}")
     trainer = CONSEPTTrainer(
         model=model_args.model_name_or_path,
+        processing_class=processor,
         args=training_args,
-        reward_funcs=get_semantic_reward(AutoTokenizer.from_pretrained(model_args.model_name_or_path).eos_token),
+        reward_funcs=get_semantic_reward(processor.eos_token),
         train_dataset=train_dataset,
     )
-
+    validate_accelerator_config()
+    trainer.accelerator.print(f"Begin training CONSEPT for model `{model_args.model_name_or_path}`")
     trainer.train(
         resume_from_checkpoint=training_args.resume_from_checkpoint if training_args.resume_from_checkpoint else None
     )

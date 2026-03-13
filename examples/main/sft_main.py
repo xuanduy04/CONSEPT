@@ -1,5 +1,7 @@
 import torch
 from datasets import load_dataset
+from transformers import AutoTokenizer
+from utils import validate_accelerator_config
 
 from trl import ModelConfig, ScriptArguments, SFTConfig, SFTTrainer, TrlParser
 
@@ -12,7 +14,7 @@ def set_gradient_accumulation_steps(args, effective_batch_size: int = 256):
     )
     args.gradient_accumulation_steps = effective_batch_size // (args.per_device_train_batch_size * number_of_devices)
     print(
-        f"`gradient_accumulation_steps` was set to {args.gradient_accumulation_steps} inorder to make effective batch size equal {effective_batch_size}"
+        f"`gradient_accumulation_steps` was set to {args.gradient_accumulation_steps} in order to make effective batch size equal {effective_batch_size}"
         f"\n\teffective_batch_size = per_device_train_batch_size * gradient_accumulation_steps * number_of_devices"
         f"\n\t{effective_batch_size} = {args.per_device_train_batch_size} * {args.gradient_accumulation_steps} * {number_of_devices}"
     )
@@ -31,9 +33,9 @@ if __name__ == "__main__":
         attn_implementation=model_args.attn_implementation,
         dtype=dtype,
     )
+    processor = AutoTokenizer.from_pretrained(model_args.model_name_or_path, model_max_len=training_args.max_len)
 
-    # ======== IMPORTANT ======== #
-    # Hard coding effective batch size.
+    # NOTE: This will hard-code effective batch size.
     training_args = set_gradient_accumulation_steps(training_args)
 
     ################
@@ -50,9 +52,15 @@ if __name__ == "__main__":
     ################
     # Training
     ################
-    print(f"Begin training SFT for model {model_args.model_name_or_path}")
     training_args.accelerator_config.dispatch_batches = False
-    trainer = SFTTrainer(model=model_args.model_name_or_path, args=training_args, train_dataset=train_dataset)
+    trainer = SFTTrainer(
+        model=model_args.model_name_or_path,
+        processing_class=processor,
+        args=training_args,
+        train_dataset=train_dataset,
+    )
+    validate_accelerator_config()
+    trainer.accelerator.print(f"Begin training SFT for model `{model_args.model_name_or_path}`")
     trainer.train(
         resume_from_checkpoint=training_args.resume_from_checkpoint if training_args.resume_from_checkpoint else None
     )
