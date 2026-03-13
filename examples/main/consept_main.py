@@ -54,7 +54,7 @@ if __name__ == "__main__":
         reward_funcs=get_semantic_reward(processor.eos_token),
         train_dataset=train_dataset,
     )
-    validate_accelerator_config()
+    validate_accelerator_config(trainer.accelerator)
     trainer.accelerator.print(f"Begin training CONSEPT for model `{model_args.model_name_or_path}`")
     trainer.train(
         resume_from_checkpoint=training_args.resume_from_checkpoint if training_args.resume_from_checkpoint else None
