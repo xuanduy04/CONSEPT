@@ -8,32 +8,47 @@ if TYPE_CHECKING:
 
 
 class PromptSolutionCollator:
-    """Wrap the data collator to create "prompt" and "solution" columns from raw "text"."""
+    """Wraps the data collator to create "prompt" and "solution" columns from raw "text"."""
 
     def __init__(
         self,
         data_collator,
         tokenizer: "PreTrainedTokenizerBase",
         completion_length: "Synchronized[int]",
-        prompt_length_remove_threshold: int,
+        max_length: int,
     ):
         self.data_collator = data_collator
         self.tokenizer = tokenizer
         self.completion_length = completion_length
-        self.prompt_length_remove_threshold = prompt_length_remove_threshold
+        self.max_length = max_length
 
     def _make_prompt(self, feature: dict) -> dict:
         if not isinstance(feature, dict):
             return feature
-
         if "text" not in feature:
             raise ValueError("Could not find raw text column")
 
-        tokens = self.tokenizer.encode(feature["text"])
-        feature["prompt"] = self.tokenizer.decode(tokens[: len(tokens) - self.completion_length.value])
-        feature["solution"] = self.tokenizer.decode(tokens[len(tokens) - self.completion_length.value :])
+        completion_length = self.completion_length.value
 
-        return feature
+        tokens = self.tokenizer.encode(
+            feature["text"],
+            # This ensures that total tokens will not exceed max_length
+            # Note that the min_prompt_length requirement is assured via the sampler-level, not here.
+            max_length=self.max_length,
+            truncation=True,
+        )
+        # Maybe.. # Snap to nearest whitespace to avoid partial BPE word fragments?
+        # prompt_text = self.tokenizer.decode(tokens[:-completion_length])
+        # first_space = prompt_text.find(" ")
+        # if first_space != -1 and not prompt_text[0].isspace():
+        #     prompt_text = prompt_text[first_space:]
+        # # then set "prompt": prompt_text
+
+        return {
+            "prompt": self.tokenizer.decode(tokens[:-completion_length]),
+            "solution": self.tokenizer.decode(tokens[-completion_length:]),
+        }  # I decided to remove the full 'text' column as it is quite a lot of text.
+        # GRPO also natively duplicates all columns too, so it might be a significant amount of memory
 
     def __call__(self, features: list[dict]):
         return self.data_collator([self._make_prompt(feature) for feature in features])
@@ -51,18 +66,16 @@ if __name__ == "__main__":
 
     from .sampler import DynamicRepeatSampler
 
-    prompt_length_remove_threshold = 100
+    min_prompt_length = 100
     completion_length = multiprocessing.Value("i", 1000)
     processing_class = AutoTokenizer.from_pretrained("Qwen/Qwen3-0.6B-Base")
 
     def valid_item_fn(item: str) -> bool:
         tokens = processing_class.encode(item)
-        return len(tokens) - completion_length.value <= prompt_length_remove_threshold
+        return len(tokens) - completion_length.value <= min_prompt_length
 
     data_collator = identity
-    data_collator = PromptSolutionCollator(
-        data_collator, processing_class, completion_length, prompt_length_remove_threshold
-    )
+    data_collator = PromptSolutionCollator(data_collator, processing_class, completion_length)
 
     train_dataset = load_dataset("HuggingFaceTB/cosmopedia", name="openstax", split="train")
     train_dataset = train_dataset.remove_columns([c for c in train_dataset.column_names if c != "text"])

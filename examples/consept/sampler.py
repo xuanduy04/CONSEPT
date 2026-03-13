@@ -94,13 +94,13 @@ if __name__ == "__main__":
     from torch.utils.data import DataLoader
     from transformers import AutoTokenizer
 
-    prompt_length_remove_threshold = 100
+    min_prompt_length = 100
     completion_length = multiprocessing.Value("i", 1000)
     processing_class = AutoTokenizer.from_pretrained("Qwen/Qwen3-0.6B-Base")
 
     def valid_item_fn(item: str) -> bool:
         tokens = processing_class.encode(item)
-        return len(tokens) - completion_length.value <= prompt_length_remove_threshold
+        return len(tokens) - completion_length.value <= min_prompt_length
 
     train_dataset = load_dataset("HuggingFaceTB/cosmopedia", name="openstax", split="train")
     train_dataset = train_dataset.remove_columns([c for c in train_dataset.column_names if c != "text"])

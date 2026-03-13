@@ -206,6 +206,9 @@ class CONSEPTTrainer(GRPOTrainer):
             model_name = model_name.split("/")[-1]
             args = CONSEPTConfig(output_dir=f"{model_name}-CONSEPT")
 
+        # setting a default max_prompt_length so that the class initializations are correct and compatible
+        args.max_prompt_length = args.max_length - args.max_completion_length
+        # max_prompt_length will not be used directly after this initialization call.
         super().__init__(
             model=model,
             reward_funcs=reward_funcs,
@@ -224,7 +227,8 @@ class CONSEPTTrainer(GRPOTrainer):
         # Dynamically changing the completion length during training
         self.initial_completion_length = self.args.initial_completion_length
         self._max_completion_length = self.max_completion_length
-        self.prompt_length_remove_threshold = self.args.prompt_length_remove_threshold
+        self.min_prompt_length = self.args.min_prompt_length
+        self.max_length = self.args.max_length
         # vvvvvv This value is synced across workers to ensure the DataLoader only returns samples that satisfies our dynamically changing constraint.
         self.current_completion_length: "Synchronized" = multiprocessing.Value("i", self.initial_completion_length)
         # ^^^^^^
@@ -264,7 +268,7 @@ class CONSEPTTrainer(GRPOTrainer):
         learning_rate: float | None = None,
     ) -> None:
         if self.control.should_save and self.args.should_save and (not self.args.save_only_model):
-            # according to super()._maybe_log_save_evaluate(...), this is the complete save condition
+            # according to `super()._maybe_log_save_evaluate()`, this is the complete save condition
             run_dir = self._get_output_dir(trial=trial)
             self._save_completion_length_scheduler(run_dir=run_dir)
 
@@ -278,10 +282,12 @@ class CONSEPTTrainer(GRPOTrainer):
             start_time=start_time,
             learning_rate=learning_rate,
         )
-        # NOTE: We update the completion length here,
-        #       as this function called after sync_step's end.
+        # NOTE: We update the completion length here, as this function called after sync_step's end.
         # Treat it like an... evaluation, ya know?
         self.completion_length_scheduler.step()
+        # Positioning the scheduler's step here is merely an implementation choice, as
+        # this function must be updated anyways (in order to save the `completion_length_scheduler` state)
+        # and overriding the `Trainer.train()` function to merely add a singular line is overly complicated.
 
     # ================== LOAD completion_length_scheduler ================== #
     # These next 2 functions loads the completion_length_scheduler
@@ -302,13 +308,17 @@ class CONSEPTTrainer(GRPOTrainer):
 
     # ================== USE completion_length_scheduler ================== #
     def _set_max_completion_length(self):
-        """Sync completion length, ensuring that new generations abide by
-        the `current_completion_length`'s value"""
+        """Sync completion length, ensuring that new generations abide by the `current_completion_length`'s value"""
         value = self.current_completion_length.value
 
         self.max_completion_length = value
+        self.max_prompt_length = self.max_length - value
+
         if not self.use_vllm:
             self.generation_config.update(max_new_tokens=value)
+        # if we do use_vllm, note that the engine's `max_model_len` value is fixed and equal to `self.max_length`
+        #   which we have ensured by setting `args.max_prompt_length = args.max_length - args.max_completion_length`
+        #   prior to the `GRPOTrainer.__init__()` call  (see line 210 in this file)
 
     # This method overrides `GRPOTrainer._generate` to support dynamic completion length
     # Maintenance note: This method is a copy-paste of the original `GRPOTrainer._generate`
@@ -369,7 +379,7 @@ class CONSEPTTrainer(GRPOTrainer):
 
         # vvvvvv Here is the change
         data_collator = PromptSolutionCollator(
-            data_collator, self.processing_class, self.current_completion_length, self.prompt_length_remove_threshold
+            data_collator, self.processing_class, self.current_completion_length, self.max_length
         )
         # ^^^^^^
 
@@ -400,8 +410,10 @@ class CONSEPTTrainer(GRPOTrainer):
         def valid_item_fn(item: str) -> bool:
             return (
                 len(self.processing_class.encode(item)) - self.current_completion_length.value
-                >= self.prompt_length_remove_threshold
-            )
+                >= self.min_prompt_length
+            )  # The sampler does not check for max_length, as we can simply truncate such samples,
+            #    so, all over-long samples are valid and can always be used.
+            # NOTE: We truncate samples in the `data_collator` (i.e. `collate_fn`), see `get_train_dataloader()`
 
         return DynamicRepeatSampler(
             data_source=dataset,
@@ -435,21 +447,21 @@ class CONSEPTTrainer(GRPOTrainer):
         if mode == "eval":
             metrics = {f"eval_{key}": val for key, val in metrics.items()}
 
-        # vvvvvv Here's a change
+        # vvvvvv Here's the first change
         if mode == "train":
             logs["training_completion_length"] = self.current_completion_length.value
         # ^^^^^^
 
         logs = {**logs, **metrics}
-        # vvvvvv Here is another change. Though this one IS similar in function to GRPOTrainer,
-        # calling BaseTrainer.log()
+        # vvvvvv Here is the 2nd change.
+        # Though this change IS similar in function to GRPOTrainer, calling BaseTrainer.log()
         super(GRPOTrainer, self).log(logs, start_time)
         # ^^^^^^
         self._metrics[mode].clear()
 
         if self.accelerator.is_main_process and self.log_completions:
             if is_rich_available():
-                # vvvvvv Here is another change
+                # vvvvvv Here is the 3rd change
                 print_prompt_completion_solutions_sample(
                     self._logs["prompt"],
                     self._logs["completion"],
